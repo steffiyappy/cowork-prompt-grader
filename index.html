@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="referrer" content="no-referrer" />
+<title>Cowork Prompt Grader</title>
+<style>
+  :root {
+    --bg: #faf7f2;
+    --card: #ffffff;
+    --ink: #2b2a28;
+    --muted: #6b6864;
+    --accent: #d97706;
+    --accent-soft: #fde8c8;
+    --slate: #334155;
+    --light: #16a34a;
+    --medium: #d97706;
+    --heavy: #dc2626;
+    --border: #e8e2d8;
+    --shadow: 0 2px 12px rgba(0,0,0,0.04);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.5;
+  }
+  .container { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header { margin-bottom: 28px; }
+  h1 { margin: 0 0 6px; font-size: 28px; color: var(--slate); }
+  .subtitle { color: var(--muted); margin: 0; font-size: 15px; }
+  .privacy {
+    display: inline-block; margin-top: 12px; padding: 6px 12px;
+    background: #ecfdf5; color: #065f46; border-radius: 999px;
+    font-size: 13px; font-weight: 500;
+  }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 24px; margin-bottom: 20px;
+    box-shadow: var(--shadow);
+  }
+  label { display: block; font-weight: 600; margin-bottom: 8px; color: var(--slate); }
+  textarea {
+    width: 100%; min-height: 160px; padding: 14px;
+    border: 1px solid var(--border); border-radius: 8px;
+    font-family: inherit; font-size: 14px; resize: vertical;
+    background: #fdfcfa;
+  }
+  textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+  .actions { margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap; }
+  button {
+    padding: 10px 20px; border: none; border-radius: 8px;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: transform 0.05s, box-shadow 0.1s;
+  }
+  button.primary { background: var(--accent); color: white; }
+  button.primary:hover { box-shadow: 0 2px 8px rgba(217,119,6,0.3); }
+  button.secondary { background: #f1ede5; color: var(--slate); }
+  button:active { transform: translateY(1px); }
+  .grade-badge {
+    display: inline-block; padding: 8px 18px; border-radius: 999px;
+    font-weight: 700; font-size: 16px; letter-spacing: 0.3px;
+  }
+  .grade-light { background: #dcfce7; color: #14532d; }
+  .grade-medium { background: #fef3c7; color: #78350f; }
+  .grade-heavy { background: #fee2e2; color: #7f1d1d; }
+  .dims { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 16px; }
+  .dim {
+    padding: 14px; border: 1px solid var(--border); border-radius: 8px;
+    background: #fdfcfa;
+  }
+  .dim-name { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
+  .dim-score { font-size: 22px; font-weight: 700; margin: 4px 0; color: var(--slate); }
+  .dim-detail { font-size: 13px; color: var(--muted); }
+  .bar {
+    height: 6px; background: #f1ede5; border-radius: 3px; overflow: hidden; margin-top: 8px;
+  }
+  .bar-fill { height: 100%; background: var(--accent); transition: width 0.3s; }
+  .tip {
+    padding: 12px 14px; background: #fff8ec; border-left: 3px solid var(--accent);
+    border-radius: 4px; margin-top: 10px; font-size: 14px;
+  }
+  .tip strong { color: var(--slate); }
+  .rewrite {
+    white-space: pre-wrap; padding: 16px; background: #f8f5ef;
+    border-radius: 8px; font-size: 14px; border: 1px solid var(--border);
+  }
+  .savings { font-size: 14px; color: #065f46; margin-top: 10px; font-weight: 500; }
+  .legend { font-size: 13px; color: var(--muted); margin-top: 8px; }
+  footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 40px; }
+  .hidden { display: none; }
+  details { margin-top: 12px; }
+  summary { cursor: pointer; color: var(--accent); font-size: 13px; font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Cowork Prompt Grader</h1>
+    <p class="subtitle">Score your prompt as Light, Medium, or Heavy and get a leaner rewrite that does the same job.</p>
+    <span class="privacy">🔒 Runs entirely in your browser. Nothing is sent or stored.</span>
+  </header>
+
+  <div class="card">
+    <label for="prompt">Paste your prompt</label>
+    <textarea id="prompt" placeholder="e.g. For my upcoming customer meeting with Adatum, analyze my interactions based on relevant emails, meeting notes, CRM updates, and support incidents..."></textarea>
+    <div class="actions">
+      <button class="primary" onclick="analyze()">Grade & Optimise</button>
+      <button class="secondary" onclick="loadSample()">Try a sample</button>
+      <button class="secondary" onclick="clearAll()">Clear</button>
+    </div>
+  </div>
+
+  <div id="results" class="hidden">
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <h2 style="margin:0; font-size:20px; color:var(--slate);">Grade</h2>
+        <span id="grade" class="grade-badge"></span>
+      </div>
+      <p id="gradeReason" class="legend"></p>
+      <div class="dims" id="dims"></div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 12px; font-size:20px; color:var(--slate);">Optimisation tips</h2>
+      <div id="tips"></div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 12px; font-size:20px; color:var(--slate);">Suggested rewrite</h2>
+      <p class="legend">Same intent, trimmed scope and tighter output to reduce credits.</p>
+      <div id="rewrite" class="rewrite"></div>
+      <p id="savings" class="savings"></p>
+      <details>
+        <summary>How is this graded?</summary>
+        <p class="legend" style="margin-top:8px;">
+          Based on the four Cowork billing dimensions: <strong>Models</strong> (reasoning depth and output length),
+          <strong>Context</strong> (number of sources referenced), <strong>Tools</strong> (actions taken),
+          and <strong>Runtime</strong> (multi-step or long-running work). Heuristic only, not an exact credit prediction.
+        </p>
+      </details>
+    </div>
+  </div>
+
+  <footer>
+    No analytics. No cookies. No prompt data leaves your browser. View source to verify.
+  </footer>
+</div>
+
+<script>
+const SAMPLE = `For my upcoming customer meeting with Adatum, analyze my interactions based on relevant emails, meeting notes, CRM updates, and support incidents to identify deal status, risks, and competitive threats. Create a briefing doc and client-ready presentation covering our differentiation, opportunities, and next steps. Email Moana and Tim with a concise summary and recommended actions.`;
+
+function loadSample() {
+  document.getElementById('prompt').value = SAMPLE;
+}
+function clearAll() {
+  document.getElementById('prompt').value = '';
+  document.getElementById('results').classList.add('hidden');
+}
+
+const CONTEXT_KEYWORDS = ['email', 'emails', 'meeting note', 'meeting notes', 'crm', 'support incident', 'support ticket', 'file', 'files', 'document', 'documents', 'chat', 'teams message', 'sharepoint', 'onedrive', 'past interaction', 'history', 'transcript', 'calendar', 'wiki', 'spreadsheet', 'report'];
+const TOOL_KEYWORDS = ['email ', 'send ', 'create ', 'draft ', 'schedule ', 'update ', 'post ', 'message ', 'notify ', 'generate ', 'build ', 'make ', 'produce ', 'publish ', 'share ', 'assign ', 'file ', 'submit '];
+const HEAVY_MODEL_SIGNALS = ['analyze', 'analyse', 'identify risks', 'competitive', 'strategy', 'compare', 'reason', 'evaluate', 'recommend', 'deep dive', 'synthesi', 'forecast'];
+const RUNTIME_SIGNALS = ['then ', 'after that', 'once ', 'follow up', 'monitor', 'track', 'over time', 'daily', 'weekly', 'recurring', 'watch for', 'wait for'];
+const OUTPUT_SIGNALS = ['presentation', 'briefing doc', 'report', 'deck', 'slides', 'full document', 'detailed', 'comprehensive', 'long-form'];
+
+function countMatches(text, list) {
+  const lower = text.toLowerCase();
+  const hits = new Set();
+  list.forEach(k => { if (lower.includes(k)) hits.add(k.trim()); });
+  return hits;
+}
+
+function score(text) {
+  const len = text.trim().split(/\s+/).length;
+  const ctxHits = countMatches(text, CONTEXT_KEYWORDS);
+  const toolHits = countMatches(text, TOOL_KEYWORDS);
+  const modelHits = countMatches(text, HEAVY_MODEL_SIGNALS);
+  const runtimeHits = countMatches(text, RUNTIME_SIGNALS);
+  const outputHits = countMatches(text, OUTPUT_SIGNALS);
+
+  const context = Math.min(5, ctxHits.size);
+  const tools = Math.min(5, toolHits.size);
+  const models = Math.min(5, modelHits.size + outputHits.size + (len > 80 ? 1 : 0));
+  const runtime = Math.min(5, runtimeHits.size + (toolHits.size >= 3 ? 1 : 0) + (ctxHits.size >= 4 ? 1 : 0));
+
+  const total = context + tools + models + runtime;
+  let grade, gradeClass;
+  if (total <= 5) { grade = 'Light'; gradeClass = 'grade-light'; }
+  else if (total <= 11) { grade = 'Medium'; gradeClass = 'grade-medium'; }
+  else { grade = 'Heavy'; gradeClass = 'grade-heavy'; }
+
+  return {
+    grade, gradeClass, total,
+    dims: {
+      Models: { score: models, detail: [...modelHits, ...outputHits].slice(0,4).join(', ') || 'simple output' },
+      Context: { score: context, detail: [...ctxHits].slice(0,4).join(', ') || 'no external sources' },
+      Tools:   { score: tools,   detail: [...toolHits].map(t=>t.trim()).slice(0,4).join(', ') || 'no actions' },
+      Runtime: { score: runtime, detail: runtimeHits.size ? [...runtimeHits].join(', ') : (toolHits.size >= 3 ? 'multi-step' : 'single pass') }
+    },
+    wordCount: len
+  };
+}
+
+function buildTips(s) {
+  const tips = [];
+  if (s.dims.Context.score >= 3) {
+    tips.push('<strong>Trim context sources.</strong> Pick the 1, 2 most relevant sources (e.g. last 30 days of emails + CRM) instead of "all emails, meeting notes, CRM, support incidents".');
+  }
+  if (s.dims.Tools.score >= 3) {
+    tips.push('<strong>Split actions.</strong> Ask for the analysis first; trigger emails or doc creation in a separate follow-up only after you review the output.');
+  }
+  if (s.dims.Models.score >= 3) {
+    tips.push('<strong>Tighten the output.</strong> Replace "briefing doc and client-ready presentation" with "1-page bullet summary" unless you truly need the full deliverable.');
+  }
+  if (s.dims.Runtime.score >= 3) {
+    tips.push('<strong>Avoid chained steps.</strong> Multi-step orchestration (then, after that, once) increases runtime cost. Run steps one at a time.');
+  }
+  if (s.wordCount > 120) {
+    tips.push('<strong>Shorten the prompt.</strong> Drop adjectives and restate the goal in 1, 2 sentences. Longer prompts often invite longer outputs.');
+  }
+  if (tips.length === 0) {
+    tips.push('Looks lean already. Nothing major to trim.');
+  }
+  return tips;
+}
+
+function buildRewrite(text, s) {
+  // Heuristic compression. Pulls out the core action verb + main object.
+  let core = text.trim().replace(/\s+/g, ' ');
+  // Strip filler
+  core = core.replace(/\b(very|really|truly|comprehensive|detailed|client-ready|relevant|appropriate|various|several|please)\b/gi, '').replace(/\s+/g, ' ');
+
+  // Try to find subject (after "with" or first proper noun)
+  const subjectMatch = core.match(/\b(?:with|for|about)\s+([A-Z][A-Za-z0-9]+)/);
+  const subject = subjectMatch ? subjectMatch[1] : 'the topic';
+
+  let rewrite = '';
+  if (s.grade === 'Light') {
+    rewrite = core;
+  } else if (s.grade === 'Medium') {
+    rewrite = `Summarise the key points about ${subject} in 5 bullets. Use only my last 30 days of emails and the latest CRM record. Output as plain text, no document.`;
+  } else {
+    rewrite = `Step 1 (this prompt): In 5 bullets, give me deal status, top 2 risks, and 1 recommended next step for ${subject}. Use only the most recent CRM record and last 2 weeks of emails. Plain text only.\n\nStep 2 (run separately after I review): Draft a short email to the named stakeholders with the agreed next step.`;
+  }
+  return rewrite;
+}
+
+function estimateSavings(s) {
+  // Rough heuristic: each dimension point ~ x credits. Heavy rewrite collapses to roughly Light.
+  const before = s.total;
+  const after = s.grade === 'Light' ? before : (s.grade === 'Medium' ? Math.max(3, Math.round(before * 0.55)) : Math.max(4, Math.round(before * 0.35)));
+  const pct = Math.round((1 - after/before) * 100);
+  if (pct <= 0) return '';
+  return `Estimated credit reduction: ~${pct}% (heuristic, not exact).`;
+}
+
+function analyze() {
+  const text = document.getElementById('prompt').value.trim();
+  if (!text) return;
+  const s = score(text);
+
+  document.getElementById('results').classList.remove('hidden');
+  const gradeEl = document.getElementById('grade');
+  gradeEl.textContent = s.grade;
+  gradeEl.className = 'grade-badge ' + s.gradeClass;
+  document.getElementById('gradeReason').textContent = `Total signal score: ${s.total} / 20 across the four Cowork billing dimensions.`;
+
+  const dimsEl = document.getElementById('dims');
+  dimsEl.innerHTML = '';
+  Object.entries(s.dims).forEach(([name, d]) => {
+    const pct = (d.score / 5) * 100;
+    dimsEl.innerHTML += `
+      <div class="dim">
+        <div class="dim-name">${name}</div>
+        <div class="dim-score">${d.score} / 5</div>
+        <div class="dim-detail">${d.detail}</div>
+        <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
+      </div>`;
+  });
+
+  const tipsEl = document.getElementById('tips');
+  tipsEl.innerHTML = buildTips(s).map(t => `<div class="tip">${t}</div>`).join('');
+
+  document.getElementById('rewrite').textContent = buildRewrite(text, s);
+  document.getElementById('savings').textContent = estimateSavings(s);
+
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+</script>
+</body>
+</html>

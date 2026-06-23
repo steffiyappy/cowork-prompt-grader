@@ -109,8 +109,11 @@
     <textarea id="prompt" placeholder="e.g. For my upcoming customer meeting with Adatum, analyze my interactions based on relevant emails, meeting notes, CRM updates, and support incidents..."></textarea>
     <div class="actions">
       <button class="primary" onclick="analyze()">Grade & Optimise</button>
-      <button class="secondary" onclick="loadSample()">Try a sample</button>
       <button class="secondary" onclick="clearAll()">Clear</button>
+    </div>
+    <div style="margin-top:14px;">
+      <div class="dim-name" style="margin-bottom:6px;">Try a sample</div>
+      <div class="actions" id="sampleButtons"></div>
     </div>
   </div>
 
@@ -151,11 +154,52 @@
 </div>
 
 <script>
-const SAMPLE = `For my upcoming customer meeting with Adatum, analyze my interactions based on relevant emails, meeting notes, CRM updates, and support incidents to identify deal status, risks, and competitive threats. Create a briefing doc and client-ready presentation covering our differentiation, opportunities, and next steps. Email Moana and Tim with a concise summary and recommended actions.`;
+const SAMPLES = [
+  {
+    label: 'Light · quick summary',
+    grade: 'Light',
+    text: `Summarise my last meeting with Contoso in 5 bullets.`
+  },
+  {
+    label: 'Light · single email draft',
+    grade: 'Light',
+    text: `Draft a short thank-you email to Priya for joining yesterday's workshop.`
+  },
+  {
+    label: 'Medium · research + doc',
+    grade: 'Medium',
+    text: `Review my emails and CRM notes from the last 30 days with Fabrikam and create a 1-page status update covering open risks and next steps.`
+  },
+  {
+    label: 'Medium · meeting prep',
+    grade: 'Medium',
+    text: `For my call tomorrow with Northwind, pull the last quarter of support tickets and recent emails, then give me a briefing with top 3 issues and suggested talking points.`
+  },
+  {
+    labelfix: '',
+    label: 'Heavy · full account review',
+    grade: 'Heavy',
+    text: `For my upcoming customer meeting with Adatum, analyze my interactions based on relevant emails, meeting notes, CRM updates, and support incidents to identify deal status, risks, and competitive threats. Create a briefing doc and client-ready presentation covering our differentiation, opportunities, and next steps. Email Moana and Tim with a concise summary and recommended actions.`
+  },
+  {
+    label: 'Heavy · multi-step campaign',
+    grade: 'Heavy',
+    text: `Analyse all my emails, Teams chats, meeting notes, and SharePoint files from the past quarter related to Project Helios. Identify blockers, risks, and stakeholder sentiment. Build a comprehensive status report and a stakeholder presentation. Then schedule a follow-up meeting with all leads, send the deck to the exec sponsor, and post a summary in the project Teams channel. After that, monitor weekly for new updates.`
+  }
+];
 
-function loadSample() {
-  document.getElementById('prompt').value = SAMPLE;
+function loadSample(idx) {
+  document.getElementById('prompt').value = SAMPLES[idx].text;
+  analyze();
 }
+function renderSampleButtons() {
+  const el = document.getElementById('sampleButtons');
+  el.innerHTML = SAMPLES.map((s, i) => {
+    const cls = s.grade === 'Light' ? 'grade-light' : s.grade === 'Medium' ? 'grade-medium' : 'grade-heavy';
+    return `<button class="secondary" onclick="loadSample(${i})"><span class="grade-badge ${cls}" style="padding:2px 8px;font-size:11px;margin-right:6px;">${s.grade}</span>${s.label.replace(/^[A-Za-z]+ · /, '')}</button>`;
+  }).join('');
+}
+renderSampleButtons();
 function clearAll() {
   document.getElementById('prompt').value = '';
   document.getElementById('results').classList.add('hidden');

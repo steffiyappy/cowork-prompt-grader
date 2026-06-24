@@ -100,7 +100,7 @@
 <div class="container">
   <header>
     <h1>Cowork Prompt Grader</h1>
-    <p class="subtitle">Score your prompt as Light, Medium, or Heavy and get a leaner rewrite that does the same job.</p>
+    <p class="subtitle">Score your prompt as Light, Medium, or Heavy, see its illustrative Copilot Credit charge, and get a leaner rewrite that does the same job.</p>
     <span class="privacy">🔒 Runs entirely in your browser. Nothing is sent or stored.</span>
   </header>
 
@@ -128,21 +128,31 @@
     </div>
 
     <div class="card">
+      <h2 style="margin:0 0 8px; font-size:20px; color:var(--slate);">Estimated charge</h2>
+      <div id="band"></div>
+      <p class="legend" style="margin-top:8px;">Illustrative per-task range from the <strong>Microsoft Copilot Credits Guide (June 2026)</strong>, billed at $0.01 / Copilot Credit. These are rough planning estimates, not a live meter — actual charges vary with the work performed.</p>
+    </div>
+
+    <div class="card">
       <h2 style="margin:0 0 12px; font-size:20px; color:var(--slate);">Optimisation tips</h2>
       <div id="tips"></div>
     </div>
 
     <div class="card">
       <h2 style="margin:0 0 12px; font-size:20px; color:var(--slate);">Suggested rewrite</h2>
-      <p class="legend">Same intent, trimmed scope and tighter output to reduce credits.</p>
+      <p class="legend">Same intent and every requirement kept — just restructured so the system wastes less motion (less hunting for sources, fewer chained actions, a right-sized model). Fill in the &lt;placeholders&gt;.</p>
       <div id="rewrite" class="rewrite"></div>
       <p id="savings" class="savings"></p>
       <details>
         <summary>How is this graded?</summary>
         <p class="legend" style="margin-top:8px;">
-          Based on the four Cowork billing dimensions: <strong>Models</strong> (reasoning depth and output length),
-          <strong>Context</strong> (number of sources referenced), <strong>Tools</strong> (actions taken),
-          and <strong>Runtime</strong> (multi-step or long-running work). Heuristic only, not an exact credit prediction.
+          Cowork credit usage scales on four buckets (per the June 2026 Credits Guide):
+          <strong>Models</strong> — the AI model chosen per task (quality vs speed vs cost);
+          <strong>Runtime</strong> — cloud orchestration that keeps agents running, including long or chained work;
+          <strong>Context</strong> — reading the emails, files, meetings and people behind the work;
+          <strong>Tools</strong> — actions taken (sending, scheduling, posting, creating).
+          Each bucket is rated 0–3 from the prompt, then mapped to the guide's illustrative
+          Light (70–200), Medium (400–600) and Heavy (&gt;1,500) credit bands. Heuristic only — not an exact credit prediction.
         </p>
       </details>
     </div>
@@ -205,101 +215,170 @@ function clearAll() {
   document.getElementById('results').classList.add('hidden');
 }
 
-const CONTEXT_KEYWORDS = ['email', 'emails', 'meeting note', 'meeting notes', 'crm', 'support incident', 'support ticket', 'file', 'files', 'document', 'documents', 'chat', 'teams message', 'sharepoint', 'onedrive', 'past interaction', 'history', 'transcript', 'calendar', 'wiki', 'spreadsheet', 'report'];
-const TOOL_KEYWORDS = ['email ', 'send ', 'create ', 'draft ', 'schedule ', 'update ', 'post ', 'message ', 'notify ', 'generate ', 'build ', 'make ', 'produce ', 'publish ', 'share ', 'assign ', 'file ', 'submit '];
-const HEAVY_MODEL_SIGNALS = ['analyze', 'analyse', 'identify risks', 'competitive', 'strategy', 'compare', 'reason', 'evaluate', 'recommend', 'deep dive', 'synthesi', 'forecast'];
-const RUNTIME_SIGNALS = ['then ', 'after that', 'once ', 'follow up', 'monitor', 'track', 'over time', 'daily', 'weekly', 'recurring', 'watch for', 'wait for'];
-const OUTPUT_SIGNALS = ['presentation', 'briefing doc', 'report', 'deck', 'slides', 'full document', 'detailed', 'comprehensive', 'long-form'];
+// ---------------------------------------------------------------------------
+// Grounded in the Microsoft Copilot Credits Guide (June 2026).
+// Copilot Cowork credit usage scales on four buckets: Models, Runtime,
+// Context, Tools. The guide gives illustrative per-task credit bands which we
+// map the grade to. Price is $0.01 / Copilot Credit. Planning estimates only.
+// ---------------------------------------------------------------------------
+const PRICE_PER_CREDIT = 0.01;
+const BANDS = {
+  Light:  { credits: '70–200',  low: 70,   high: 200,  example: 'A weekly status update pulled from your calendar, saved as a draft for you to review.' },
+  Medium: { credits: '400–600', low: 400,  high: 600,  example: 'Meeting prep: emails, calendar, CRM and files pulled into a briefing document from a template.' },
+  Heavy:  { credits: '>1,500',  low: 1500, high: null, example: 'Analyse 6 months of exported usage data, classify it, and produce a leadership-ready analysis.' }
+};
+function dollars(c){ return '$' + (c * PRICE_PER_CREDIT).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
-function countMatches(text, list) {
-  const lower = text.toLowerCase();
-  const hits = new Set();
-  list.forEach(k => { if (lower.includes(k)) hits.add(k.trim()); });
+// Source TYPES the system would have to read = Context. Synonyms grouped so
+// each distinct source counts once.
+const CONTEXT_GROUPS = {
+  'emails':   ['email', 'emails', 'inbox', 'outlook'],
+  'meetings': ['meeting note', 'meeting notes', 'transcript', 'calendar', 'meetings', 'meeting'],
+  'CRM':      ['crm', 'salesforce', 'dynamics', 'pipeline', 'deal record'],
+  'tickets':  ['support incident', 'support ticket', 'support tickets', 'cases', 'incidents'],
+  'files':    ['file ', 'files', 'document', 'sharepoint', 'onedrive', 'spreadsheet', 'attachment', 'data'],
+  'chats':    ['chat', 'teams message', 'teams chat', 'channel'],
+  'other':    ['wiki', 'history', 'past interaction']
+};
+// Volume / time-range signals: the system reads a LOT, pushing Context up.
+const VOLUME_SIGNALS = ['all ', 'every email', 'past quarter', 'last quarter', '6 months', 'six months', 'months of', 'last year', 'past year', 'entire', 'exported', 'dataset'];
+// Actions with a side effect outside the chat = Tools (cost more than a draft).
+const SEND_ACTIONS = ['send ', 'schedule ', 'post ', 'publish ', 'share ', 'assign ', 'notify ', 'submit ', 'email moana', 'email tim', 'email the', 'email a', 'send the', 'send a'];
+// Producing a deliverable for the user to review (no external side effect).
+const CREATE_SIGNALS = ['create ', 'draft ', 'build ', 'produce ', 'generate ', 'write ', 'prepare ', 'compile ', 'save as a draft', 'give me', 'summarise', 'summarize'];
+// Reasoning depth = Models (a harder task may justify a stronger model).
+const REASONING_SIGNALS = ['analyze', 'analyse', 'classif', 'competitive', 'strategy', 'synthesi', 'evaluate', 'forecast', 'risk', 'pattern', 'trend', 'compare', 'sentiment', 'root cause'];
+const RICH_OUTPUT = ['presentation', 'deck', 'slides', 'briefing doc', 'briefing document', 'report', 'leadership', 'executive summary', 'comprehensive', 'full document'];
+// Orchestration / long-running = Runtime.
+const CHAIN_SIGNALS = ['then ', 'after that', 'once ', 'follow up', 'next,'];
+const RECURRING_SIGNALS = ['every monday', 'every week', 'weekly', 'daily', 'recurring', 'monitor', 'track', 'watch for', 'ongoing', 'each week', 'runs every'];
+
+function any(text, list){ return list.some(k => text.includes(k)); }
+function count(text, list){ return list.filter(k => text.includes(k)).length; }
+function contextGroups(text){
+  const hits = [];
+  for (const [name, kws] of Object.entries(CONTEXT_GROUPS)) {
+    if (kws.some(k => text.includes(k))) hits.push(name);
+  }
   return hits;
 }
 
 function score(text) {
-  const len = text.trim().split(/\s+/).length;
-  const ctxHits = countMatches(text, CONTEXT_KEYWORDS);
-  const toolHits = countMatches(text, TOOL_KEYWORDS);
-  const modelHits = countMatches(text, HEAVY_MODEL_SIGNALS);
-  const runtimeHits = countMatches(text, RUNTIME_SIGNALS);
-  const outputHits = countMatches(text, OUTPUT_SIGNALS);
+  const lower = ' ' + text.toLowerCase().replace(/\s+/g, ' ') + ' ';
+  const words = text.trim().split(/\s+/).length;
 
-  const context = Math.min(5, ctxHits.size);
-  const tools = Math.min(5, toolHits.size);
-  const models = Math.min(5, modelHits.size + outputHits.size + (len > 80 ? 1 : 0));
-  const runtime = Math.min(5, runtimeHits.size + (toolHits.size >= 3 ? 1 : 0) + (ctxHits.size >= 4 ? 1 : 0));
+  // --- Context (0–3): how many distinct source types + how much volume ---
+  const ctxGroups = contextGroups(lower);
+  const bigVolume = any(lower, VOLUME_SIGNALS);
+  let context = 0;
+  if (ctxGroups.length >= 4 || bigVolume) context = 3;
+  else if (ctxGroups.length >= 2) context = 2;
+  else if (ctxGroups.length === 1) context = 1;
 
-  const total = context + tools + models + runtime;
-  let grade, gradeClass;
-  if (total <= 5) { grade = 'Light'; gradeClass = 'grade-light'; }
-  else if (total <= 11) { grade = 'Medium'; gradeClass = 'grade-medium'; }
-  else { grade = 'Heavy'; gradeClass = 'grade-heavy'; }
+  // --- Tools (0–3): external actions cost more than an internal draft ---
+  const sendCount = count(lower, SEND_ACTIONS);
+  const creates = any(lower, CREATE_SIGNALS);
+  let tools = 0;
+  if (sendCount >= 2) tools = 3;
+  else if (sendCount === 1) tools = 2;
+  else if (creates) tools = 1;
 
+  // --- Models (0–3): reasoning depth + richness of the deliverable ---
+  const reasoningCount = count(lower, REASONING_SIGNALS);
+  const rich = any(lower, RICH_OUTPUT);
+  let models = 0;
+  if (reasoningCount >= 3 || (reasoningCount >= 1 && bigVolume)) models = 3;
+  else if (reasoningCount >= 1 && rich) models = 2;
+  else if (reasoningCount >= 1 || rich) models = 1;
+
+  // --- Runtime (0–3): chaining, big batches, recurrence ---
+  const chained = count(lower, CHAIN_SIGNALS);
+  const recurring = any(lower, RECURRING_SIGNALS);
+  let runtime = 0;
+  if (chained >= 2 || (chained >= 1 && tools >= 2)) runtime = 3;
+  else if (chained >= 1 || bigVolume) runtime = 2;
+  else if (recurring) runtime = 1;
+
+  const total = context + tools + models + runtime; // 0–12
+
+  // --- Tier: anchored to the guide's real drivers, not raw keyword count ---
+  const heavy = total >= 8
+    || (models >= 3 && context >= 2)   // deep analysis over real data volume
+    || (tools >= 3 && runtime >= 2);   // multi-action orchestration
+  const light = total <= 4 && context <= 1 && tools <= 1; // one source, one light deliverable, no send
+  let grade = heavy ? 'Heavy' : (light ? 'Light' : 'Medium');
+  const gradeClass = grade === 'Light' ? 'grade-light' : grade === 'Medium' ? 'grade-medium' : 'grade-heavy';
+
+  const reasoningList = REASONING_SIGNALS.filter(k => lower.includes(k));
   return {
-    grade, gradeClass, total,
+    grade, gradeClass, total, wordCount: words,
+    flags: { bigVolume, sendCount, creates, recurring, chained, reasoningCount, ctxCount: ctxGroups.length },
     dims: {
-      Models: { score: models, detail: [...modelHits, ...outputHits].slice(0,4).join(', ') || 'simple output' },
-      Context: { score: context, detail: [...ctxHits].slice(0,4).join(', ') || 'no external sources' },
-      Tools:   { score: tools,   detail: [...toolHits].map(t=>t.trim()).slice(0,4).join(', ') || 'no actions' },
-      Runtime: { score: runtime, detail: runtimeHits.size ? [...runtimeHits].join(', ') : (toolHits.size >= 3 ? 'multi-step' : 'single pass') }
-    },
-    wordCount: len
+      Models:  { score: models,  detail: (reasoningList.length || rich) ? [...reasoningList, ...(rich ? ['rich deliverable'] : [])].slice(0,3).join(', ') : 'simple output' },
+      Context: { score: context, detail: ctxGroups.length ? ctxGroups.join(', ') + (bigVolume ? ' · large volume' : '') : 'no external sources' },
+      Tools:   { score: tools,   detail: sendCount ? sendCount + ' external action' + (sendCount > 1 ? 's' : '') + ' (send/post/schedule)' : (creates ? 'create a draft (no send)' : 'no actions') },
+      Runtime: { score: runtime, detail: chained ? 'chained steps' : (bigVolume ? 'large batch' : (recurring ? 'recurring' : 'single pass')) }
+    }
   };
 }
 
 function buildTips(s) {
   const tips = [];
-  if (s.dims.Context.score >= 3) {
-    tips.push('<strong>Trim context sources.</strong> Pick the 1, 2 most relevant sources (e.g. last 30 days of emails + CRM) instead of "all emails, meeting notes, CRM, support incidents".');
+  if (s.dims.Context.score >= 2) {
+    tips.push('<strong>Narrow the sources.</strong> Name the 1–2 sources that actually answer the question (e.g. "last 30 days of emails + the latest CRM record") instead of "all emails, files, CRM and tickets". Reading fewer sources is the biggest Context saving.');
   }
-  if (s.dims.Tools.score >= 3) {
-    tips.push('<strong>Split actions.</strong> Ask for the analysis first; trigger emails or doc creation in a separate follow-up only after you review the output.');
+  if (s.dims.Tools.score >= 2) {
+    tips.push('<strong>Separate thinking from doing.</strong> Get the analysis first, review it, then send / post / schedule in a second prompt. Don\'t let it act on the first pass.');
   }
-  if (s.dims.Models.score >= 3) {
-    tips.push('<strong>Tighten the output.</strong> Replace "briefing doc and client-ready presentation" with "1-page bullet summary" unless you truly need the full deliverable.');
+  if (s.dims.Models.score >= 2) {
+    tips.push('<strong>Right-size the deliverable.</strong> If you don\'t truly need a full deck or report, ask for a short bullet summary — a lighter output can run on a cheaper, faster model.');
   }
-  if (s.dims.Runtime.score >= 3) {
-    tips.push('<strong>Avoid chained steps.</strong> Multi-step orchestration (then, after that, once) increases runtime cost. Run steps one at a time.');
+  if (s.dims.Runtime.score >= 2) {
+    tips.push('<strong>Avoid long chains.</strong> "Do X, then Y, then monitor weekly" keeps the system running and looping. Run one step at a time.');
   }
-  if (s.wordCount > 120) {
-    tips.push('<strong>Shorten the prompt.</strong> Drop adjectives and restate the goal in 1, 2 sentences. Longer prompts often invite longer outputs.');
+  if (s.flags.bigVolume) {
+    tips.push('<strong>Cap the time range.</strong> "6 months / everything" forces a lot of reading. Give a specific window only as wide as you actually need.');
   }
   if (tips.length === 0) {
-    tips.push('Looks lean already. Nothing major to trim.');
+    tips.push('This already looks lean and well-scoped — there is little wasted motion to cut. Any saving here would be cosmetic.');
   }
   return tips;
 }
 
 function buildRewrite(text, s) {
-  // Heuristic compression. Pulls out the core action verb + main object.
-  let core = text.trim().replace(/\s+/g, ' ');
-  // Strip filler
-  core = core.replace(/\b(very|really|truly|comprehensive|detailed|client-ready|relevant|appropriate|various|several|please)\b/gi, '').replace(/\s+/g, ' ');
-
-  // Try to find subject (after "with" or first proper noun)
-  const subjectMatch = core.match(/\b(?:with|for|about)\s+([A-Z][A-Za-z0-9]+)/);
-  const subject = subjectMatch ? subjectMatch[1] : 'the topic';
-
-  let rewrite = '';
-  if (s.grade === 'Light') {
-    rewrite = core;
-  } else if (s.grade === 'Medium') {
-    rewrite = `Summarise the key points about ${subject} in 5 bullets. Use only my last 30 days of emails and the latest CRM record. Output as plain text, no document.`;
-  } else {
-    rewrite = `Step 1 (this prompt): In 5 bullets, give me deal status, top 2 risks, and 1 recommended next step for ${subject}. Use only the most recent CRM record and last 2 weeks of emails. Plain text only.\n\nStep 2 (run separately after I review): Draft a short email to the named stakeholders with the agreed next step.`;
-  }
-  return rewrite;
+  // Honest, requirement-PRESERVING scaffold. Your original task text is kept
+  // verbatim under [TASK]; we only add structure that removes wasted motion.
+  const original = text.trim().replace(/\s+/g, ' ');
+  const modelHint = s.grade === 'Heavy'
+    ? 'Use a capable model — this has real analysis/branching, and a weak model that gets it wrong costs more in rework.'
+    : s.grade === 'Medium'
+      ? 'A mid-tier model is usually enough; only step up if the reasoning is genuinely hard.'
+      : 'A fast, lighter model is fine for this.';
+  const scope = s.dims.Tools.score >= 2
+    ? 'Produce the draft / analysis only. Do NOT send, post, or schedule anything yet — I will trigger that in a separate prompt after I review.'
+    : 'Touch only what is named above; do not go hunting for extra sources.';
+  const stop = (s.dims.Runtime.score >= 2 || s.flags.bigVolume)
+    ? '\n[STOP]       If a source is missing or ambiguous, stop and ask rather than searching broadly or looping.'
+    : '';
+  return (
+'[MODEL HINT] ' + modelHint + '\n' +
+'[CONTEXT]    Pre-load only what is needed so the system does not hunt for it:\n' +
+'             <name the exact sources + time window, e.g. "last 30 days of Adatum emails + the latest CRM record">.\n' +
+'[SCOPE]      ' + scope + '\n' +
+'[TASK]       ' + original + stop
+  );
 }
 
-function estimateSavings(s) {
-  // Rough heuristic: each dimension point ~ x credits. Heavy rewrite collapses to roughly Light.
-  const before = s.total;
-  const after = s.grade === 'Light' ? before : (s.grade === 'Medium' ? Math.max(3, Math.round(before * 0.55)) : Math.max(4, Math.round(before * 0.35)));
-  const pct = Math.round((1 - after/before) * 100);
-  if (pct <= 0) return '';
-  return `Estimated credit reduction: ~${pct}% (heuristic, not exact).`;
+function headroom(s) {
+  // Honest DIRECTION only — there is no live credit meter, so never a number/%.
+  const alreadyLean = s.flags.ctxCount <= 1 && !s.flags.bigVolume && s.dims.Tools.score <= 1;
+  if (s.grade === 'Light' || alreadyLean) {
+    return { level: 'Low', msg: 'This is already lean and well-scoped. The rewrite is mostly cosmetic — expect little to no saving.' };
+  }
+  if (s.grade === 'Heavy') {
+    return { level: 'High', msg: 'There is real wasted motion to cut — broad sources, multiple actions, or long chains. The rewrite should help. But the core work still costs the same; only the wasted motion goes away.' };
+  }
+  return { level: 'Medium', msg: 'Some wasted motion to trim — usually a few extra sources or a deliverable heavier than you need.' };
 }
 
 function analyze() {
@@ -311,16 +390,26 @@ function analyze() {
   const gradeEl = document.getElementById('grade');
   gradeEl.textContent = s.grade;
   gradeEl.className = 'grade-badge ' + s.gradeClass;
-  document.getElementById('gradeReason').textContent = `Total signal score: ${s.total} / 20 across the four Cowork billing dimensions.`;
+  document.getElementById('gradeReason').textContent = `Mapped to the guide's ${s.grade} band from the four cost buckets below (Context, Tools, Models, Runtime — each rated 0–3).`;
+
+  // Illustrative credit + dollar band from the June 2026 guide.
+  const band = BANDS[s.grade];
+  const dollarRange = band.high ? `${dollars(band.low)}–${dollars(band.high)}` : `over ${dollars(band.low)}`;
+  document.getElementById('band').innerHTML =
+    `<div style="display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;">
+       <span style="font-size:26px; font-weight:800; color:var(--slate);">${band.credits} credits</span>
+       <span style="font-size:16px; color:var(--muted);">≈ ${dollarRange} per task</span>
+     </div>
+     <p class="legend" style="margin-top:6px;">Comparable guide example: ${band.example}</p>`;
 
   const dimsEl = document.getElementById('dims');
   dimsEl.innerHTML = '';
   Object.entries(s.dims).forEach(([name, d]) => {
-    const pct = (d.score / 5) * 100;
+    const pct = (d.score / 3) * 100;
     dimsEl.innerHTML += `
       <div class="dim">
         <div class="dim-name">${name}</div>
-        <div class="dim-score">${d.score} / 5</div>
+        <div class="dim-score">${d.score} / 3</div>
         <div class="dim-detail">${d.detail}</div>
         <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
       </div>`;
@@ -330,7 +419,10 @@ function analyze() {
   tipsEl.innerHTML = buildTips(s).map(t => `<div class="tip">${t}</div>`).join('');
 
   document.getElementById('rewrite').textContent = buildRewrite(text, s);
-  document.getElementById('savings').textContent = estimateSavings(s);
+  const h = headroom(s);
+  document.getElementById('savings').innerHTML =
+    `<strong>Savings headroom: ${h.level}.</strong> ${h.msg} ` +
+    `<span style="color:var(--muted); font-weight:400;">These show direction, not exact prices — Cowork has no live credit meter, so for real numbers run both prompts and compare your billing page.</span>`;
 
   document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }

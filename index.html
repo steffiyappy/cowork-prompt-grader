@@ -135,7 +135,7 @@
 
     <div class="card">
       <h2 style="margin:0 0 4px; font-size:20px; color:var(--slate);">What drives the cost</h2>
-      <p class="legend" style="margin:0 0 12px;">Each bucket below was isolated with a controlled Cowork experiment: a trivial baseline task, then one lever spiked at a time. The marginal figure is the credits that lever added over the ~24-credit baseline.</p>
+      <p class="legend" style="margin:0 0 12px;">Each bucket below was isolated with a controlled Cowork experiment <strong>replicated 10 times</strong> (40 runs total): a trivial baseline task (mean 24.0 credits, near-zero variance), then one lever spiked at a time. The figure is the mean credits that lever added over baseline; the direction held across all replicates.</p>
       <div id="drivers"></div>
       <p class="legend" style="margin-top:10px;">Takeaway: <strong>thinking is cheap; reading and doing are not.</strong> Reasoning added only ~5 credits even for a long analysis. Retrieval (~51) and especially building a file (~64 per document) dominate — and presentations cost more than documents.</p>
     </div>
@@ -245,14 +245,16 @@ const BANDS = {
 function dollars(c){ return '$' + (c * PRICE_PER_CREDIT).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 // Per-bucket marginal cost MEASURED via controlled isolation experiments on a
-// live tenant (24 Jun 2026): a trivial baseline task (~24 credits fixed
-// overhead), then one lever spiked at a time. Marginal = spiked run − baseline.
+// live tenant (24 Jun 2026), each REPLICATED 10x: a trivial baseline task
+// (mean 24.0, sd 0.0), then one lever spiked at a time. Marginal = bucket
+// mean − baseline mean. Figures below are means of 10 runs with the observed
+// standard deviation; the direction is statistically robust.
 const BASELINE_OVERHEAD = 24;
 const DRIVERS = [
-  { bucket: 'Models',  label: 'Reasoning / output', marginal: 5,  probe: 'A 6-paragraph competitive analysis with no data lookup added only ~5 credits over baseline.', weight: 'low' },
-  { bucket: 'Runtime', label: 'Chaining / orchestration', marginal: 0, probe: 'Three trivial steps in sequence added ~0. Runtime only balloons with real multi-step work and long-running file builds.', weight: 'low' },
-  { bucket: 'Context', label: 'Reading sources', marginal: 51, probe: 'A broad search across email, Teams, files and calendar added ~51. Scales with how many sources and how much volume it must read.', weight: 'high' },
-  { bucket: 'Tools',   label: 'Building / sending', marginal: 64, probe: 'Creating and saving a single Word document added ~64. A presentation costs more again.', weight: 'high' }
+  { bucket: 'Models',  label: 'Reasoning / output', marginal: 6,  probe: 'A 6-paragraph competitive analysis with no data lookup. Mean +5.7 credits over baseline (n=10, sd 0.3) — reasoning is cheap and very consistent.', weight: 'low' },
+  { bucket: 'Runtime', label: 'Chaining / orchestration', marginal: 0, probe: 'Three trivial steps in sequence added ~0 over baseline. Runtime only balloons with real multi-step work and long-running file builds.', weight: 'low' },
+  { bucket: 'Context', label: 'Reading sources', marginal: 51, probe: 'A broad search across email, Teams, files and calendar. Mean +51.3 credits (n=10, range 70–88, sd 5.8) — varies with how many sources/items it reads.', weight: 'high' },
+  { bucket: 'Tools',   label: 'Building / sending', marginal: 66, probe: 'Creating and saving one Word document. Mean +65.7 credits (n=10, range 85–96, sd 4.1) — the most expensive lever; a presentation costs more again.', weight: 'high' }
 ];
 
 // Source TYPES the system would have to read = Context. Synonyms grouped so

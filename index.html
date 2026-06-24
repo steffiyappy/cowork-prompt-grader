@@ -67,6 +67,7 @@
   .grade-light { background: #dcfce7; color: #14532d; }
   .grade-medium { background: #fef3c7; color: #78350f; }
   .grade-heavy { background: #fee2e2; color: #7f1d1d; }
+  .grade-prod { background: #3b0764; color: #f5e8ff; }
   .dims { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 16px; }
   .dim {
     padding: 14px; border: 1px solid var(--border); border-radius: 8px;
@@ -167,7 +168,8 @@
           <strong>Runtime</strong> — orchestration and long-running work;
           <strong>Context</strong> — reading emails, files, meetings and people;
           <strong>Tools</strong> — actions taken (building, sending, scheduling).
-          Each bucket is scored 0–3 from the wording of your prompt and combined into a Light / Medium / Heavy grade.
+          Each bucket is scored 0–3 from the wording of your prompt and combined into a Light / Medium / Heavy / <strong>Heavy+</strong> grade.
+          <strong>Heavy+</strong> flags production-scale data work — multi-tab Excel rebuilds, full-year consolidations, multi-workbook reconciliation with verification loops — which can cost <em>thousands</em> of credits, far above a normal Heavy task.
           This is a heuristic to compare prompts — not a credit prediction. For the real charge, run the task in Cowork and type <code>/cost</code> in the task chat.
         </p>
       </details>
@@ -211,6 +213,11 @@ const SAMPLES = [
     label: 'Heavy · multi-step campaign',
     grade: 'Heavy',
     text: `Analyse all my emails, Teams chats, meeting notes, and SharePoint files from the past quarter related to Project Helios. Identify blockers, risks, and stakeholder sentiment. Build a comprehensive status report and a stakeholder presentation. Then schedule a follow-up meeting with all leads, send the deck to the exec sponsor, and post a summary in the project Teams channel. After that, monitor weekly for new updates.`
+  },
+  {
+    label: 'Heavy+ · multi-tab model rebuild',
+    grade: 'Heavy+',
+    text: `Rebuild our full-year margin model workbook end-to-end. Pull the latest dated inputs folder (trades workbook, purchases workbook, IDT file, monthly pricing template), rebuild every tab (Daily Reporting, Weekly Summary, FIFO COGS, Purchases, Sales Trades, Duty Levy), apply the refinery run rate across all 12 months, recalculate so margins and totals are baked in, and verify every sheet reconciles with no formula errors. If a source is missing, carry forward the last known value. Save the updated workbook and reply with the new grand totals.`
   }
 ];
 
@@ -221,8 +228,8 @@ function loadSample(idx) {
 function renderSampleButtons() {
   const el = document.getElementById('sampleButtons');
   el.innerHTML = SAMPLES.map((s, i) => {
-    const cls = s.grade === 'Light' ? 'grade-light' : s.grade === 'Medium' ? 'grade-medium' : 'grade-heavy';
-    return `<button class="secondary" onclick="loadSample(${i})"><span class="grade-badge ${cls}" style="padding:2px 8px;font-size:11px;margin-right:6px;">${s.grade}</span>${s.label.replace(/^[A-Za-z]+ · /, '')}</button>`;
+    const cls = s.grade === 'Light' ? 'grade-light' : s.grade === 'Medium' ? 'grade-medium' : s.grade === 'Heavy' ? 'grade-heavy' : 'grade-prod';
+    return `<button class="secondary" onclick="loadSample(${i})"><span class="grade-badge ${cls}" style="padding:2px 8px;font-size:11px;margin-right:6px;">${s.grade}</span>${s.label.replace(/^[A-Za-z+]+ · /, '')}</button>`;
   }).join('');
 }
 renderSampleButtons();
@@ -249,7 +256,8 @@ const PRICE_PER_CREDIT = 0.01;
 const BANDS = {
   Light:  { credits: '~80–150',  low: 80,  high: 150, measured: 96,  example: '"Summarise my last meeting in 5 bullets" — measured 96 credits (~$0.96).' },
   Medium: { credits: '~200–300', low: 200, high: 300, measured: 225, example: 'Meeting prep pulled from emails, calendar and files into a briefing document — measured 225 credits (~$2.25).' },
-  Heavy:  { credits: '~450–650', low: 450, high: 650, measured: 541, example: 'Deep multi-source account analysis producing a briefing doc + client presentation — measured 541 credits (~$5.41).' }
+  Heavy:  { credits: '~450–650', low: 450, high: 650, measured: 541, example: 'Deep multi-source account analysis producing a briefing doc + client presentation — measured 541 credits (~$5.41).' },
+  'Heavy+': { credits: '~700–7,900', low: 700, high: 7900, measured: 1416, example: 'Production data tasks measured on a live tenant: daily margin-model pull 1,416; multi-tab model rebuild ~6,200; full-year asset run-rate consolidation ~7,890 credits.' }
 };
 function dollars(c){ return '$' + (c * PRICE_PER_CREDIT).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
@@ -289,6 +297,19 @@ const RICH_OUTPUT = ['presentation', 'deck', 'slides', 'briefing doc', 'briefing
 // Orchestration / long-running = Runtime.
 const CHAIN_SIGNALS = ['then ', 'after that', 'once ', 'follow up', 'next,'];
 const RECURRING_SIGNALS = ['every monday', 'every week', 'weekly', 'daily', 'recurring', 'monitor', 'track', 'watch for', 'ongoing', 'each week', 'runs every'];
+
+// ---------------------------------------------------------------------------
+// PRODUCTION-SCALE detectors. The 0–3 buckets see WHETHER a prompt reads sources
+// and builds a file, but are blind to SCALE. Real data-engineering prompts
+// (multi-tab Excel rebuilds, full-year consolidations, multi-workbook
+// reconciliation with verification loops) cost thousands of credits, not
+// hundreds. These signals catch that scale so such prompts grade "Heavy+"
+// (Production) instead of collapsing into Medium/Heavy.
+// Anchored on real /cost figures: 708–7,890 credits for production tasks.
+const REBUILD_SIGNALS = ['every tab', 'all tabs', 'all sheets', 'every sheet', 'across all sheets', 'rebuild every', 'rebuild the', 'per-complex detail tab', 'append the new day', 'update the', 'workbook end-to-end', 'model end-to-end'];
+const VERIFY_SIGNALS  = ['recalculate', 'reconcile', 'reconciles', 'no formula errors', 'verify bulk', 'verify every', 'baked in', 'do not double-count', 'carry forward'];
+const SCOPE_SIGNALS   = ['full-year', 'full year', 'jan-dec', '12 months', 'all 12', 'monthly view', 'all feeds', 'across all feeds', 'all complexes', 'consolidat', 'end-to-end'];
+const MODELENG_SIGNALS = ['margin model', 'run rate', 'run-rate', 'fifo', 'inventory ledger', ' ledger', 'pricing template', 'planning workbook', 'planning krn', 'daily planning', 'margin pull', 'cogs'];
 
 function any(text, list){ return list.some(k => text.includes(k)); }
 function count(text, list){ return list.filter(k => text.includes(k)).length; }
@@ -338,18 +359,30 @@ function score(text) {
 
   const total = context + tools + models + runtime; // 0–12
 
+  // --- Production-scale score: each family of heavy signals contributes 1 ---
+  const tabColRefs = (lower.match(/ tab\b/g) || []).length + (lower.match(/\bcol[\s.]/g) || []).length;
+  const prodFamilies =
+    (any(lower, REBUILD_SIGNALS)  ? 1 : 0) +
+    (any(lower, VERIFY_SIGNALS)   ? 1 : 0) +
+    (any(lower, SCOPE_SIGNALS)    ? 1 : 0) +
+    (any(lower, MODELENG_SIGNALS) ? 1 : 0) +
+    (tabColRefs >= 3 ? 1 : 0);
+  // Production = sustained, multi-tab data-engineering work (≥3 heavy signal
+  // families). These prompts measured 700–7,900 credits on a live tenant.
+  const production = prodFamilies >= 3;
+
   // --- Tier: anchored to the guide's real drivers, not raw keyword count ---
   const heavy = total >= 8
     || (models >= 3 && context >= 2)   // deep analysis over real data volume
     || (tools >= 3 && runtime >= 2);   // multi-action orchestration
   const light = total <= 4 && context <= 1 && tools <= 1; // one source, one light deliverable, no send
-  let grade = heavy ? 'Heavy' : (light ? 'Light' : 'Medium');
-  const gradeClass = grade === 'Light' ? 'grade-light' : grade === 'Medium' ? 'grade-medium' : 'grade-heavy';
+  let grade = production ? 'Heavy+' : (heavy ? 'Heavy' : (light ? 'Light' : 'Medium'));
+  const gradeClass = grade === 'Light' ? 'grade-light' : grade === 'Medium' ? 'grade-medium' : grade === 'Heavy' ? 'grade-heavy' : 'grade-prod';
 
   const reasoningList = REASONING_SIGNALS.filter(k => lower.includes(k));
   return {
     grade, gradeClass, total, wordCount: words,
-    flags: { bigVolume, sendCount, creates, recurring, chained, reasoningCount, ctxCount: ctxGroups.length },
+    flags: { bigVolume, sendCount, creates, recurring, chained, reasoningCount, ctxCount: ctxGroups.length, production, prodFamilies },
     dims: {
       Models:  { score: models,  detail: (reasoningList.length || rich) ? [...reasoningList, ...(rich ? ['rich deliverable'] : [])].slice(0,3).join(', ') : 'simple output' },
       Context: { score: context, detail: ctxGroups.length ? ctxGroups.join(', ') + (bigVolume ? ' · large volume' : '') : 'no external sources' },
@@ -361,6 +394,9 @@ function score(text) {
 
 function buildTips(s) {
   const tips = [];
+  if (s.flags && s.flags.production) {
+    tips.push('<strong>This is a production-scale data task (Heavy+).</strong> Rebuilding every tab and recalculating a full model is what drives credits into the thousands. Cut cost by: (1) <em>incremental updates</em> — only append/recompute the rows or tabs that actually changed instead of a full rebuild; (2) <em>split load from report</em> — recalculate the model in one run, generate the email/deck in a separate run; (3) keep the verification loop but scope it to the sheets you touched.');
+  }
   if (s.dims.Context.score >= 2) {
     tips.push('<strong>Narrow the sources.</strong> Name the 1–2 sources that actually answer the question (e.g. "last 30 days of emails + the latest CRM record") instead of "all emails, files, CRM and tickets". Reading fewer sources is the biggest Context saving.');
   }
@@ -386,7 +422,7 @@ function buildRewrite(text, s) {
   // Honest, requirement-PRESERVING scaffold. Your original task text is kept
   // verbatim under [TASK]; we only add structure that removes wasted motion.
   const original = text.trim().replace(/\s+/g, ' ');
-  const modelHint = s.grade === 'Heavy'
+  const modelHint = (s.grade === 'Heavy' || s.grade === 'Heavy+')
     ? 'Use a capable model — this has real analysis/branching, and a weak model that gets it wrong costs more in rework.'
     : s.grade === 'Medium'
       ? 'A mid-tier model is usually enough; only step up if the reasoning is genuinely hard.'
@@ -411,6 +447,9 @@ function headroom(s) {
   const alreadyLean = s.flags.ctxCount <= 1 && !s.flags.bigVolume && s.dims.Tools.score <= 1;
   if (s.grade === 'Light' || alreadyLean) {
     return { level: 'Low', msg: 'This is already lean and well-scoped. The rewrite is mostly cosmetic — expect little to no saving.' };
+  }
+  if (s.grade === 'Heavy+') {
+    return { level: 'High', msg: 'Production-scale data work — multi-tab rebuilds, full-year consolidation, multi-source reconciliation. Tasks like this measured 700–7,900 credits on a live tenant. Biggest savings: split it (load/recalculate as one run, build the deliverable as another), narrow to only the tabs/sources that changed, and avoid full rebuilds when an incremental update will do.' };
   }
   if (s.grade === 'Heavy') {
     return { level: 'High', msg: 'There is real wasted motion to cut — broad sources, multiple actions, or long chains. The rewrite should help. But the core work still costs the same; only the wasted motion goes away.' };

@@ -129,6 +129,11 @@
       <div class="dims" id="dims"></div>
     </div>
 
+    <div class="card" id="surfaceCard">
+      <h2 style="margin:0 0 10px; font-size:20px; color:var(--slate);">Do you even need Cowork?</h2>
+      <div id="surface"></div>
+    </div>
+
     <div id="internalBlock" class="hidden">
       <div class="card" style="border:1px solid #fca5a5; background:#fff7f7;">
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
@@ -136,17 +141,7 @@
           <span style="font-size:11px; font-weight:700; color:#b91c1c; background:#fee2e2; padding:3px 8px; border-radius:999px;">INTERNAL — DO NOT SHARE</span>
         </div>
         <div id="band" style="margin-top:10px;"></div>
-        <p class="legend" style="margin-top:8px;">Per-task range measured on a live M365 Copilot tenant via Cowork's <code>/cost</code> command (Jun 2026), billed at $0.01 / Copilot Credit. One representative task per tier — a real data point, not a guarantee. The June 2026 Credits Guide quotes higher illustrative bands (Light 70–200, Medium 400–600, Heavy &gt;1,500); measured Medium/Heavy came in well below those.</p>
-      </div>
-
-      <div class="card" style="border:1px solid #fca5a5; background:#fff7f7;">
-        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-          <h2 style="margin:0; font-size:20px; color:var(--slate);">What drives the cost</h2>
-          <span style="font-size:11px; font-weight:700; color:#b91c1c; background:#fee2e2; padding:3px 8px; border-radius:999px;">INTERNAL — DO NOT SHARE</span>
-        </div>
-        <p class="legend" style="margin:8px 0 12px;">Each bucket below was isolated with a controlled Cowork experiment <strong>replicated 10 times</strong> (40 runs total): a trivial baseline task (mean 24.0 credits, near-zero variance), then one lever spiked at a time. The figure is the mean credits that lever added over baseline; the direction held across all replicates. Tenant- and task-specific — not a general quote.</p>
-        <div id="drivers"></div>
-        <p class="legend" style="margin-top:10px;">Takeaway: <strong>thinking is cheap; reading and doing are not.</strong> Reasoning added only ~6 credits even for a long analysis. Retrieval (~51) and especially building a file (~66 per document) dominate — and presentations cost more than documents.</p>
+        <p class="legend" style="margin-top:8px;">Per-task range measured on a live M365 Copilot tenant via Cowork's <code>/cost</code> command (Jun 2026), billed at $0.01 / Copilot Credit. Anchored on a small number of real tasks per tier — a rough planning range, not a guarantee. Heavy+ figures come from real production tasks (1,416 / ~6,200 / ~7,890 credits).</p>
       </div>
     </div>
 
@@ -281,7 +276,7 @@ const CONTEXT_GROUPS = {
   'meetings': ['meeting note', 'meeting notes', 'transcript', 'calendar', 'meetings', 'meeting'],
   'CRM':      ['crm', 'salesforce', 'dynamics', 'pipeline', 'deal record'],
   'tickets':  ['support incident', 'support ticket', 'support tickets', 'cases', 'incidents'],
-  'files':    ['file ', 'files', 'document', 'sharepoint', 'onedrive', 'spreadsheet', 'attachment', 'data'],
+  'files':    ['file ', 'files', 'document', 'sharepoint', 'onedrive', 'spreadsheet', 'attachment', 'data', 'workbook', 'worksheet', ' sheet', 'sheets', ' tab', 'tabs', 'ledger', 'pricing template', 'planning workbook', 'inputs folder', 'excel'],
   'chats':    ['chat', 'teams message', 'teams chat', 'channel'],
   'other':    ['wiki', 'history', 'past interaction']
 };
@@ -380,14 +375,33 @@ function score(text) {
   const gradeClass = grade === 'Light' ? 'grade-light' : grade === 'Medium' ? 'grade-medium' : grade === 'Heavy' ? 'grade-heavy' : 'grade-prod';
 
   const reasoningList = REASONING_SIGNALS.filter(k => lower.includes(k));
+
+  // For production-scale prompts the raw 0–3 buckets understate the work
+  // (a "rebuild every tab + recalculate + verify" reads as Tools=1). Lift the
+  // displayed buckets so they reflect the Heavy+ verdict.
+  let ctxOut = context, toolsOut = tools, runtimeOut = runtime, modelsOut = models;
+  let ctxDetail, toolsDetail, runtimeDetail, modelsDetail;
+  if (production) {
+    ctxOut = 3; toolsOut = 3; runtimeOut = 3; modelsOut = Math.max(models, 2);
+    ctxDetail = 'many inputs: multiple workbooks / files / emails';
+    toolsDetail = 'rebuild + recalculate a multi-tab workbook (heaviest lever)';
+    runtimeDetail = 'recalculate & verify loops across all sheets';
+    modelsDetail = 'multi-step data engineering';
+  } else {
+    ctxDetail = ctxGroups.length ? ctxGroups.join(', ') + (bigVolume ? ' · large volume' : '') : 'no external sources';
+    toolsDetail = sendCount ? sendCount + ' external action' + (sendCount > 1 ? 's' : '') + ' (send/post/schedule)' : (creates ? 'create a draft (no send)' : 'no actions');
+    runtimeDetail = chained ? 'chained steps' : (bigVolume ? 'large batch' : (recurring ? 'recurring' : 'single pass'));
+    modelsDetail = (reasoningList.length || rich) ? [...reasoningList, ...(rich ? ['rich deliverable'] : [])].slice(0,3).join(', ') : 'simple output';
+  }
+
   return {
     grade, gradeClass, total, wordCount: words,
     flags: { bigVolume, sendCount, creates, recurring, chained, reasoningCount, ctxCount: ctxGroups.length, production, prodFamilies },
     dims: {
-      Models:  { score: models,  detail: (reasoningList.length || rich) ? [...reasoningList, ...(rich ? ['rich deliverable'] : [])].slice(0,3).join(', ') : 'simple output' },
-      Context: { score: context, detail: ctxGroups.length ? ctxGroups.join(', ') + (bigVolume ? ' · large volume' : '') : 'no external sources' },
-      Tools:   { score: tools,   detail: sendCount ? sendCount + ' external action' + (sendCount > 1 ? 's' : '') + ' (send/post/schedule)' : (creates ? 'create a draft (no send)' : 'no actions') },
-      Runtime: { score: runtime, detail: chained ? 'chained steps' : (bigVolume ? 'large batch' : (recurring ? 'recurring' : 'single pass')) }
+      Models:  { score: modelsOut,  detail: modelsDetail },
+      Context: { score: ctxOut,     detail: ctxDetail },
+      Tools:   { score: toolsOut,   detail: toolsDetail },
+      Runtime: { score: runtimeOut, detail: runtimeDetail }
     }
   };
 }
@@ -502,27 +516,37 @@ function renderInternal(s) {
        <span style="font-size:16px; color:var(--muted);">≈ ${dollarRange} per task</span>
      </div>
      <p class="legend" style="margin-top:6px;">Measured example: ${band.example}</p>`;
-  const driversEl = document.getElementById('drivers');
-  if (driversEl) {
-    const maxM = Math.max(...DRIVERS.map(d => d.marginal), 1);
-    const rows = [`<div class="dim" style="border-style:dashed;">
-        <div class="dim-name">Baseline overhead</div>
-        <div class="dim-score">~${BASELINE_OVERHEAD} credits</div>
-        <div class="dim-detail">Every task pays this fixed cost before any lever.</div>
-      </div>`];
-    DRIVERS.slice().sort((a, b) => b.marginal - a.marginal).forEach(d => {
-      const pct = (d.marginal / maxM) * 100;
-      const colour = d.weight === 'high' ? 'var(--heavy)' : 'var(--light)';
-      rows.push(`<div class="dim">
-        <div class="dim-name">${d.bucket} · ${d.label}</div>
-        <div class="dim-score">+${d.marginal} credits</div>
-        <div class="dim-detail">${d.probe}</div>
-        <div class="bar"><div class="bar-fill" style="width:${pct}%; background:${colour};"></div></div>
-      </div>`);
-    });
-    driversEl.className = 'dims';
-    driversEl.innerHTML = rows.join('');
+}
+
+function surfaceAdvice(s, text) {
+  const lower = ' ' + text.toLowerCase().replace(/\s+/g, ' ') + ' ';
+  // Cowork (usage-billed) is genuinely warranted only when the task must act on
+  // its own (send/post/schedule), run unattended/scheduled, or do sustained
+  // multi-tab production work. Everything else can usually run in an INCLUDED
+  // M365 Copilot surface (Chat, Researcher, Analyst, in-app Copilots) for free.
+  const needsCowork = s.grade === 'Heavy+'
+    || s.flags.sendCount >= 1
+    || s.flags.recurring
+    || (s.dims.Tools.score >= 3 && s.dims.Runtime.score >= 3);
+  if (needsCowork) {
+    const why = s.grade === 'Heavy+' ? 'sustained multi-step data work'
+      : s.flags.sendCount >= 1 ? 'it sends / posts / schedules on your behalf'
+      : s.flags.recurring ? 'it runs unattended on a schedule'
+      : 'it orchestrates several steps and actions';
+    return { needsCowork: true,
+      msg: `<strong>Cowork is the right tool here</strong> — ${why}, which is exactly what Cowork is built for. The included Copilots can't run autonomously or take actions for you.` };
   }
+  const sugg = [];
+  if (/summari|recap|catch me up|what did|brief me|tl;dr|notes from/.test(lower)) sugg.push('<strong>Copilot Chat</strong> for the summary/recap');
+  if (/research|find out|look into|landscape|background on|competitive|market|literature/.test(lower)) sugg.push('<strong>Researcher</strong> for multi-source research');
+  if (/analy|trend|chart|forecast|pivot|spreadsheet|excel|the data|dataset|numbers/.test(lower)) sugg.push('<strong>Analyst</strong> or <strong>Excel Copilot</strong> for the analysis');
+  if (/draft|write |reply|respond|compose|email to/.test(lower)) sugg.push('<strong>Copilot Chat</strong> or <strong>Outlook Copilot</strong> for the draft');
+  if (/deck|slides|presentation|powerpoint|pptx/.test(lower)) sugg.push('<strong>PowerPoint Copilot</strong> for the deck');
+  if (/\bdocument\b|\breport\b|\bword\b|\bmemo\b|\bletter\b/.test(lower)) sugg.push('<strong>Word Copilot</strong> for the document');
+  const seen = new Set(); const picks = sugg.filter(x => !seen.has(x) && seen.add(x)).slice(0, 3);
+  const list = picks.length ? picks.join('; ') : '<strong>Copilot Chat</strong>';
+  return { needsCowork: false,
+    msg: `💡 <strong>You may not need Cowork for this.</strong> It looks like a one-shot task with no autonomous actions — try ${list}. These are <strong>included in your Microsoft 365 Copilot licence and use zero Cowork credits</strong>. Save Cowork for when it must run unattended or take actions for you.` };
 }
 
 function analyze() {
@@ -552,6 +576,10 @@ function analyze() {
 
   const tipsEl = document.getElementById('tips');
   tipsEl.innerHTML = buildTips(s).map(t => `<div class="tip">${t}</div>`).join('');
+
+  const sa = surfaceAdvice(s, text);
+  document.getElementById('surface').innerHTML =
+    `<div class="tip" style="${sa.needsCowork ? '' : 'border-left-color:#16a34a; background:#f0fdf4;'}">${sa.msg}</div>`;
 
   document.getElementById('rewrite').textContent = buildRewrite(text, s);
   renderInternal(s);

@@ -102,6 +102,7 @@
     <h1>Cowork Prompt Grader</h1>
     <p class="subtitle">Score your prompt as Light, Medium, or Heavy and get a leaner rewrite that does the same job.</p>
     <span class="privacy">🔒 Runs entirely in your browser. Nothing is sent or stored.</span>
+    <button class="secondary" id="internalBtn" onclick="toggleInternal()" style="margin-top:12px; margin-left:8px; padding:6px 12px; font-size:13px; vertical-align:middle;">🔒 Internal view</button>
   </header>
 
   <div class="card">
@@ -125,6 +126,27 @@
       </div>
       <p id="gradeReason" class="legend"></p>
       <div class="dims" id="dims"></div>
+    </div>
+
+    <div id="internalBlock" class="hidden">
+      <div class="card" style="border:1px solid #fca5a5; background:#fff7f7;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <h2 style="margin:0; font-size:20px; color:var(--slate);">Estimated charge</h2>
+          <span style="font-size:11px; font-weight:700; color:#b91c1c; background:#fee2e2; padding:3px 8px; border-radius:999px;">INTERNAL — DO NOT SHARE</span>
+        </div>
+        <div id="band" style="margin-top:10px;"></div>
+        <p class="legend" style="margin-top:8px;">Per-task range measured on a live M365 Copilot tenant via Cowork's <code>/cost</code> command (Jun 2026), billed at $0.01 / Copilot Credit. One representative task per tier — a real data point, not a guarantee. The June 2026 Credits Guide quotes higher illustrative bands (Light 70–200, Medium 400–600, Heavy &gt;1,500); measured Medium/Heavy came in well below those.</p>
+      </div>
+
+      <div class="card" style="border:1px solid #fca5a5; background:#fff7f7;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <h2 style="margin:0; font-size:20px; color:var(--slate);">What drives the cost</h2>
+          <span style="font-size:11px; font-weight:700; color:#b91c1c; background:#fee2e2; padding:3px 8px; border-radius:999px;">INTERNAL — DO NOT SHARE</span>
+        </div>
+        <p class="legend" style="margin:8px 0 12px;">Each bucket below was isolated with a controlled Cowork experiment <strong>replicated 10 times</strong> (40 runs total): a trivial baseline task (mean 24.0 credits, near-zero variance), then one lever spiked at a time. The figure is the mean credits that lever added over baseline; the direction held across all replicates. Tenant- and task-specific — not a general quote.</p>
+        <div id="drivers"></div>
+        <p class="legend" style="margin-top:10px;">Takeaway: <strong>thinking is cheap; reading and doing are not.</strong> Reasoning added only ~6 credits even for a long analysis. Retrieval (~51) and especially building a file (~66 per document) dominate — and presentations cost more than documents.</p>
+      </div>
     </div>
 
     <div class="card">
@@ -204,6 +226,7 @@ function renderSampleButtons() {
   }).join('');
 }
 renderSampleButtons();
+applyInternalVisibility();
 function clearAll() {
   document.getElementById('prompt').value = '';
   document.getElementById('results').classList.add('hidden');
@@ -395,10 +418,79 @@ function headroom(s) {
   return { level: 'Medium', msg: 'Some wasted motion to trim — usually a few extra sources or a deliverable heavier than you need.' };
 }
 
+// ---- Internal view (password-gated). NOTE: this is light obfuscation on a
+// static page, NOT real security — the hash and data are in page source. ----
+const PWHASH = 'aa5825f9e9e9a113aca139c60b849c0c2867d72a87f6dd793bd7af1350fc87c8';
+let lastScore = null;
+
+async function sha256hex(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+function internalOn() { return sessionStorage.getItem('cpg_internal') === '1'; }
+function applyInternalVisibility() {
+  const on = internalOn();
+  const block = document.getElementById('internalBlock');
+  if (block) block.classList.toggle('hidden', !on);
+  const btn = document.getElementById('internalBtn');
+  if (btn) btn.textContent = on ? '🔓 Internal view: ON' : '🔒 Internal view';
+}
+async function toggleInternal() {
+  if (internalOn()) {
+    sessionStorage.removeItem('cpg_internal');
+    applyInternalVisibility();
+    return;
+  }
+  const pw = prompt('Enter internal password:');
+  if (pw === null) return;
+  const hash = await sha256hex(pw);
+  if (hash === PWHASH) {
+    sessionStorage.setItem('cpg_internal', '1');
+    applyInternalVisibility();
+    if (lastScore) renderInternal(lastScore);
+  } else {
+    alert('Incorrect password.');
+  }
+}
+function renderInternal(s) {
+  if (!internalOn()) return;
+  const band = BANDS[s.grade];
+  const dollarRange = band.high ? `${dollars(band.low)}–${dollars(band.high)}` : `over ${dollars(band.low)}`;
+  const bandEl = document.getElementById('band');
+  if (bandEl) bandEl.innerHTML =
+    `<div style="display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;">
+       <span style="font-size:26px; font-weight:800; color:var(--slate);">${band.credits} credits</span>
+       <span style="font-size:16px; color:var(--muted);">≈ ${dollarRange} per task</span>
+     </div>
+     <p class="legend" style="margin-top:6px;">Measured example: ${band.example}</p>`;
+  const driversEl = document.getElementById('drivers');
+  if (driversEl) {
+    const maxM = Math.max(...DRIVERS.map(d => d.marginal), 1);
+    const rows = [`<div class="dim" style="border-style:dashed;">
+        <div class="dim-name">Baseline overhead</div>
+        <div class="dim-score">~${BASELINE_OVERHEAD} credits</div>
+        <div class="dim-detail">Every task pays this fixed cost before any lever.</div>
+      </div>`];
+    DRIVERS.slice().sort((a, b) => b.marginal - a.marginal).forEach(d => {
+      const pct = (d.marginal / maxM) * 100;
+      const colour = d.weight === 'high' ? 'var(--heavy)' : 'var(--light)';
+      rows.push(`<div class="dim">
+        <div class="dim-name">${d.bucket} · ${d.label}</div>
+        <div class="dim-score">+${d.marginal} credits</div>
+        <div class="dim-detail">${d.probe}</div>
+        <div class="bar"><div class="bar-fill" style="width:${pct}%; background:${colour};"></div></div>
+      </div>`);
+    });
+    driversEl.className = 'dims';
+    driversEl.innerHTML = rows.join('');
+  }
+}
+
 function analyze() {
   const text = document.getElementById('prompt').value.trim();
   if (!text) return;
   const s = score(text);
+  lastScore = s;
 
   document.getElementById('results').classList.remove('hidden');
   const gradeEl = document.getElementById('grade');
@@ -423,6 +515,7 @@ function analyze() {
   tipsEl.innerHTML = buildTips(s).map(t => `<div class="tip">${t}</div>`).join('');
 
   document.getElementById('rewrite').textContent = buildRewrite(text, s);
+  renderInternal(s);
   const h = headroom(s);
   document.getElementById('savings').innerHTML =
     `<strong>Savings headroom: ${h.level}.</strong> ${h.msg} ` +

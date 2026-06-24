@@ -100,7 +100,7 @@
 <div class="container">
   <header>
     <h1>Cowork Prompt Grader</h1>
-    <p class="subtitle">Score your prompt as Light, Medium, or Heavy, see its real measured Copilot Credit charge, and get a leaner rewrite that does the same job.</p>
+    <p class="subtitle">Score your prompt as Light, Medium, or Heavy and get a leaner rewrite that does the same job.</p>
     <span class="privacy">🔒 Runs entirely in your browser. Nothing is sent or stored.</span>
   </header>
 
@@ -128,19 +128,6 @@
     </div>
 
     <div class="card">
-      <h2 style="margin:0 0 8px; font-size:20px; color:var(--slate);">Estimated charge</h2>
-      <div id="band"></div>
-      <p class="legend" style="margin-top:8px;">Per-task range <strong>measured on a live M365 Copilot tenant</strong> via Cowork's <code>/cost</code> command (Jun 2026), billed at $0.01 / Copilot Credit. One representative task per tier — a real data point, not a guarantee. The June 2026 Credits Guide quotes higher illustrative bands (Light 70–200, Medium 400–600, Heavy &gt;1,500); measured Medium/Heavy came in well below those.</p>
-    </div>
-
-    <div class="card">
-      <h2 style="margin:0 0 4px; font-size:20px; color:var(--slate);">What drives the cost</h2>
-      <p class="legend" style="margin:0 0 12px;">Each bucket below was isolated with a controlled Cowork experiment <strong>replicated 10 times</strong> (40 runs total): a trivial baseline task (mean 24.0 credits, near-zero variance), then one lever spiked at a time. The figure is the mean credits that lever added over baseline; the direction held across all replicates.</p>
-      <div id="drivers"></div>
-      <p class="legend" style="margin-top:10px;">Takeaway: <strong>thinking is cheap; reading and doing are not.</strong> Reasoning added only ~5 credits even for a long analysis. Retrieval (~51) and especially building a file (~64 per document) dominate — and presentations cost more than documents.</p>
-    </div>
-
-    <div class="card">
       <h2 style="margin:0 0 12px; font-size:20px; color:var(--slate);">Optimisation tips</h2>
       <div id="tips"></div>
     </div>
@@ -153,14 +140,13 @@
       <details>
         <summary>How is this graded?</summary>
         <p class="legend" style="margin-top:8px;">
-          Cowork credit usage scales on four buckets. Measured marginal cost per bucket on a live tenant (over a ~24-credit baseline):
-          <strong>Models</strong> — reasoning/output (~+5, cheap);
-          <strong>Runtime</strong> — chaining/long-running work (~0 when trivial, large for real orchestration);
-          <strong>Context</strong> — reading emails, files, meetings (~+51 for a broad search);
-          <strong>Tools</strong> — building or sending (~+64 per document).
-          Each bucket is rated 0–3 from the prompt, then mapped to a tier whose total was
-          <strong>measured via Cowork's <code>/cost</code></strong>:
-          Light (~96), Medium (~225), Heavy (~541) credits. Heuristic mapping — not an exact per-prompt prediction.
+          Cowork credit usage scales on four buckets:
+          <strong>Models</strong> — the AI model chosen per task (reasoning/output);
+          <strong>Runtime</strong> — orchestration and long-running work;
+          <strong>Context</strong> — reading emails, files, meetings and people;
+          <strong>Tools</strong> — actions taken (building, sending, scheduling).
+          Each bucket is scored 0–3 from the wording of your prompt and combined into a Light / Medium / Heavy grade.
+          This is a heuristic to compare prompts — not a credit prediction. For the real charge, run the task in Cowork and type <code>/cost</code> in the task chat.
         </p>
       </details>
     </div>
@@ -418,40 +404,7 @@ function analyze() {
   const gradeEl = document.getElementById('grade');
   gradeEl.textContent = s.grade;
   gradeEl.className = 'grade-badge ' + s.gradeClass;
-  document.getElementById('gradeReason').textContent = `Mapped to the ${s.grade} band from the four cost buckets below (Context, Tools, Models, Runtime — each rated 0–3).`;
-
-  // Credit + dollar band MEASURED on a live tenant via Cowork's /cost command.
-  const band = BANDS[s.grade];
-  const dollarRange = band.high ? `${dollars(band.low)}–${dollars(band.high)}` : `over ${dollars(band.low)}`;
-  document.getElementById('band').innerHTML =
-    `<div style="display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;">
-       <span style="font-size:26px; font-weight:800; color:var(--slate);">${band.credits} credits</span>
-       <span style="font-size:16px; color:var(--muted);">≈ ${dollarRange} per task</span>
-     </div>
-     <p class="legend" style="margin-top:6px;">Measured example: ${band.example}</p>`;
-
-  // Render the measured per-bucket cost drivers (static, from isolation tests).
-  const driversEl = document.getElementById('drivers');
-  if (driversEl) {
-    const maxM = Math.max(...DRIVERS.map(d => d.marginal), 1);
-    const rows = [`<div class="dim" style="border-style:dashed;">
-        <div class="dim-name">Baseline overhead</div>
-        <div class="dim-score">~${BASELINE_OVERHEAD} credits</div>
-        <div class="dim-detail">Every task pays this fixed cost before any lever.</div>
-      </div>`];
-    DRIVERS.slice().sort((a,b)=>b.marginal-a.marginal).forEach(d => {
-      const pct = (d.marginal / maxM) * 100;
-      const colour = d.weight === 'high' ? 'var(--heavy)' : 'var(--light)';
-      rows.push(`<div class="dim">
-        <div class="dim-name">${d.bucket} · ${d.label}</div>
-        <div class="dim-score">+${d.marginal} credits</div>
-        <div class="dim-detail">${d.probe}</div>
-        <div class="bar"><div class="bar-fill" style="width:${pct}%; background:${colour};"></div></div>
-      </div>`);
-    });
-    driversEl.className = 'dims';
-    driversEl.innerHTML = rows.join('');
-  }
+  document.getElementById('gradeReason').textContent = `Based on the four cost buckets below (Context, Tools, Models, Runtime — each rated 0–3).`;
 
   const dimsEl = document.getElementById('dims');
   dimsEl.innerHTML = '';

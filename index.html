@@ -146,7 +146,7 @@
 
       <div class="card" style="border:1px solid #fca5a5; background:#fff7f7; margin-top:14px;">
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-          <h2 style="margin:0; font-size:20px; color:var(--slate);">Measured tier bands</h2>
+          <h2 style="margin:0; font-size:20px; color:var(--slate);">Estimated tier bands</h2>
           <span style="font-size:11px; font-weight:700; color:#b91c1c; background:#fee2e2; padding:3px 8px; border-radius:999px;">INTERNAL — DO NOT SHARE</span>
         </div>
         <div style="overflow-x:auto;">
@@ -197,7 +197,7 @@
           </tbody>
         </table>
         </div>
-        <p class="legend" style="margin-top:10px;">45 tasks measured on a live M365 Copilot tenant via <code>/cost</code> (25 Jun 2026). The big jump is Light/Runtime (~25) → Medium (~200): that step is the first real file build or live-data read. Above that, cost scales with read depth, document length and verify loops — <strong>not</strong> the number of reasoning steps. <span style="white-space:nowrap;">*Heavy+</span> measured on 2 synthetic/real rebuilds; the upper band reflects real production tasks (1,416–7,890).</p>
+        <p class="legend" style="margin-top:10px;">Estimated from 45 tasks run on a live M365 Copilot tenant via <code>/cost</code> (25 Jun 2026) — a planning range from a small sample, not a guarantee. The big jump is Light/Runtime (~25) → Medium (~200): that step is the first real file build or live-data read. Above that, cost scales with read depth, document length and verify loops — <strong>not</strong> the number of reasoning steps. <span style="white-space:nowrap;">*Heavy+</span> is anchored on 2 synthetic/real rebuilds; the upper band reflects real production tasks (1,416–7,890).</p>
       </div>
     </div>
 
@@ -654,7 +654,7 @@ function renderInternal(s) {
        <span style="font-size:26px; font-weight:800; color:var(--slate);">${band.credits} credits</span>
        <span style="font-size:16px; color:var(--muted);">≈ ${dollarRange} per task</span>
      </div>
-     <p class="legend" style="margin-top:6px;">Measured example: ${band.example}</p>`;
+     <p class="legend" style="margin-top:6px;">Example: ${band.example}</p>`;
   // highlight the current grade's row in the measured-tier-bands table
   document.querySelectorAll('tr[data-tier]').forEach(row => {
     const active = row.getAttribute('data-tier') === s.grade;

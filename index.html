@@ -141,7 +141,63 @@
           <span style="font-size:11px; font-weight:700; color:#b91c1c; background:#fee2e2; padding:3px 8px; border-radius:999px;">INTERNAL — DO NOT SHARE</span>
         </div>
         <div id="band" style="margin-top:10px;"></div>
-        <p class="legend" style="margin-top:8px;">Per-task range measured on a live M365 Copilot tenant via Cowork's <code>/cost</code> command (Jun 2026), billed at $0.01 / Copilot Credit. Anchored on a small number of real tasks per tier — a rough planning range, not a guarantee. Heavy+ figures come from real production tasks (1,416 / ~6,200 / ~7,890 credits).</p>
+        <p class="legend" style="margin-top:8px;">Per-task range measured on a live M365 Copilot tenant via Cowork's <code>/cost</code> command (Jun 2026), billed at $0.01 / Copilot Credit. Anchored on 45 real tasks across the four tiers — a planning range, not a guarantee. Heavy+ real-world figures come from production tasks (1,416 / ~6,200 / ~7,890 credits).</p>
+      </div>
+
+      <div class="card" style="border:1px solid #fca5a5; background:#fff7f7; margin-top:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <h2 style="margin:0; font-size:20px; color:var(--slate);">Measured tier bands</h2>
+          <span style="font-size:11px; font-weight:700; color:#b91c1c; background:#fee2e2; padding:3px 8px; border-radius:999px;">INTERNAL — DO NOT SHARE</span>
+        </div>
+        <div style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse; margin-top:12px; font-size:14px;">
+          <thead>
+            <tr style="text-align:left; color:var(--muted); border-bottom:2px solid #f3c9c9;">
+              <th style="padding:7px 10px 7px 0;">Tier</th>
+              <th style="padding:7px 10px;">What it is</th>
+              <th style="padding:7px 10px; white-space:nowrap;">Credits / task</th>
+              <th style="padding:7px 10px; white-space:nowrap;">Avg</th>
+              <th style="padding:7px 10px; white-space:nowrap;">≈ $ / task</th>
+              <th style="padding:7px 0 7px 10px; text-align:center;">n</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-tier="Light" style="border-bottom:1px solid #f3dada;">
+              <td style="padding:8px 10px 8px 0; font-weight:700; color:var(--slate);">Light</td>
+              <td style="padding:8px 10px;">One-shot text — no files, no actions (summary, rewrite, list)</td>
+              <td style="padding:8px 10px; white-space:nowrap;">~24–65</td>
+              <td style="padding:8px 10px;">~28</td>
+              <td style="padding:8px 10px; white-space:nowrap;">$0.24–0.65</td>
+              <td style="padding:8px 0 8px 10px; text-align:center;">12</td>
+            </tr>
+            <tr data-tier="Medium" style="border-bottom:1px solid #f3dada;">
+              <td style="padding:8px 10px 8px 0; font-weight:700; color:var(--slate);">Medium</td>
+              <td style="padding:8px 10px;">Build one deliverable — a Word doc, deck or spreadsheet</td>
+              <td style="padding:8px 10px; white-space:nowrap;">~125–420</td>
+              <td style="padding:8px 10px;">~211</td>
+              <td style="padding:8px 10px; white-space:nowrap;">$1.25–4.20</td>
+              <td style="padding:8px 0 8px 10px; text-align:center;">16</td>
+            </tr>
+            <tr data-tier="Heavy" style="border-bottom:1px solid #f3dada;">
+              <td style="padding:8px 10px 8px 0; font-weight:700; color:var(--slate);">Heavy</td>
+              <td style="padding:8px 10px;">Read live mailbox / Teams / calendar → draft a doc from it</td>
+              <td style="padding:8px 10px; white-space:nowrap;">~160–650</td>
+              <td style="padding:8px 10px;">~248</td>
+              <td style="padding:8px 10px; white-space:nowrap;">$1.60–6.50</td>
+              <td style="padding:8px 0 8px 10px; text-align:center;">5</td>
+            </tr>
+            <tr data-tier="Heavy+" style="border-bottom:1px solid #f3dada;">
+              <td style="padding:8px 10px 8px 0; font-weight:700; color:var(--slate);">Heavy+</td>
+              <td style="padding:8px 10px;">Production multi-file rebuild / reconcile / verify loops</td>
+              <td style="padding:8px 10px; white-space:nowrap;">~385–7,900</td>
+              <td style="padding:8px 10px;">—</td>
+              <td style="padding:8px 10px; white-space:nowrap;">$3.85–79</td>
+              <td style="padding:8px 0 8px 10px; text-align:center;">2*</td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
+        <p class="legend" style="margin-top:10px;">45 tasks measured on a live M365 Copilot tenant via <code>/cost</code> (25 Jun 2026). The big jump is Light/Runtime (~25) → Medium (~200): that step is the first real file build or live-data read. Above that, cost scales with read depth, document length and verify loops — <strong>not</strong> the number of reasoning steps. <span style="white-space:nowrap;">*Heavy+</span> measured on 2 synthetic/real rebuilds; the upper band reflects real production tasks (1,416–7,890).</p>
       </div>
     </div>
 
@@ -168,6 +224,15 @@
           This is a heuristic to compare prompts — not a credit prediction. For the real charge, run the task in Cowork and type <code>/cost</code> in the task chat.
         </p>
       </details>
+    </div>
+
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <h2 style="margin:0; font-size:20px; color:var(--slate);">Ready-to-use prompt</h2>
+        <button class="secondary" id="copyReadyBtn" onclick="copyReady()" style="padding:6px 12px; font-size:13px;">Copy</button>
+      </div>
+      <p class="legend" style="margin-top:6px;">The same rewrite, but filled in with sensible concrete values so you can paste it straight into Cowork. Skim the <strong>bold</strong> assumptions and adjust any that are wrong before you run it.</p>
+      <div id="ready" class="rewrite"></div>
     </div>
   </div>
 
@@ -249,10 +314,10 @@ const PRICE_PER_CREDIT = 0.01;
 // higher illustrative bands (Light 70–200, Medium 400–600, Heavy >1,500); the
 // measured values came in well below those for Medium and Heavy.
 const BANDS = {
-  Light:  { credits: '~80–150',  low: 80,  high: 150, measured: 96,  example: '"Summarise my last meeting in 5 bullets" — measured 96 credits (~$0.96).' },
-  Medium: { credits: '~200–300', low: 200, high: 300, measured: 225, example: 'Meeting prep pulled from emails, calendar and files into a briefing document — measured 225 credits (~$2.25).' },
-  Heavy:  { credits: '~450–650', low: 450, high: 650, measured: 541, example: 'Deep multi-source account analysis producing a briefing doc + client presentation — measured 541 credits (~$5.41).' },
-  'Heavy+': { credits: '~700–7,900', low: 700, high: 7900, measured: 1416, example: 'Production data tasks measured on a live tenant: daily margin-model pull 1,416; multi-tab model rebuild ~6,200; full-year asset run-rate consolidation ~7,890 credits.' }
+  Light:  { credits: '~24–65',     low: 24,  high: 65,   measured: 28,  n: 12, example: 'A one-shot text task with no files (summary, rewrite, list) sits on the ~24-credit floor, rising to ~65 only if it drafts a short artifact. Average of 12 measured Light runs ≈ 28 credits.' },
+  Medium: { credits: '~125–420',   low: 125, high: 420,  measured: 211, n: 16, example: 'Building one deliverable — a Word doc, deck or spreadsheet. 16 measured builders ran from 125 (simple tracker) to 418 (4-page research doc with citations); average ≈ 211 credits (~$2.11).' },
+  Heavy:  { credits: '~160–650',   low: 160, high: 650,  measured: 248, n: 5,  example: 'Reading your live mailbox / Teams / calendar and drafting a doc from it — 5 measured runs averaged 248 (160–293). A multi-deliverable account analysis (doc + deck) reaches ~541.' },
+  'Heavy+': { credits: '~385–7,900', low: 385, high: 7900, measured: 617, n: 2, example: 'Production data work. Measured rebuilds: synthetic full-year model 617; real 120K-row ops close-out 385. Real-world heavy tier on this tenant: 1,416 / ~6,200 / ~7,890 credits.' }
 };
 function dollars(c){ return '$' + (c * PRICE_PER_CREDIT).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
@@ -456,6 +521,80 @@ function buildRewrite(text, s) {
   );
 }
 
+// --- "Ready-to-use" concrete rewrite: same structure as buildRewrite, but the
+// <placeholders> are filled with sensible, inferred values so the prompt can be
+// pasted straight into Cowork. Inferred bits are wrapped in <strong> for display
+// and surfaced in plain text via lastReady for the Copy button. ---
+const SOURCE_LABELS = {
+  emails:   'your Outlook emails',
+  meetings: 'your calendar and recent meeting notes',
+  CRM:      'the CRM / Dynamics account record',
+  tickets:  'open support tickets',
+  files:    'the related files in OneDrive / SharePoint',
+  chats:    'your Teams chats',
+  other:    'related history'
+};
+function escapeHtml(str){ return String(str).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function inferSubject(text){
+  // a quoted or /referenced name wins
+  const q = text.match(/[\/"']([A-Za-z0-9][A-Za-z0-9 ._-]{1,40})["']/);
+  if (q) return q[1].trim();
+  // otherwise the first proper noun that isn't a command/app word
+  const caps = text.match(/\b[A-Z][a-zA-Z]{2,}\b/g) || [];
+  const stop = new Set('Analyse Analyze Create Draft Build Produce Generate Write Prepare Compile Summarise Summarize Review Pull Look Search Cowork Copilot Microsoft Word Excel PowerPoint OneDrive SharePoint Teams Outlook The For And With Without But Use Show Then Once After Save Do Give List Compare Identify Roll Include Stop Confirm'.split(' '));
+  const cand = caps.filter(w => !stop.has(w));
+  return cand.length ? cand[0] : null;
+}
+let lastReady = '';
+function buildConcreteRewrite(text, s){
+  const original = text.trim().replace(/\s+/g, ' ');
+  const lower = ' ' + original.toLowerCase() + ' ';
+  const ctxGroups = (typeof contextGroups === 'function') ? contextGroups(lower) : [];
+  const subject = inferSubject(original);
+
+  const modelName = (s.grade === 'Heavy' || s.grade === 'Heavy+')
+    ? 'a capable model (the strongest you have)'
+    : s.grade === 'Medium' ? 'a mid-tier model' : 'a fast, lighter model';
+
+  let ctxLine;
+  if (ctxGroups.length){
+    const named = ctxGroups.map(g => SOURCE_LABELS[g] || g);
+    const scoped = subject ? ' relating to ' + subject : '';
+    ctxLine = named.join(', ') + scoped + ', from the last 30 days';
+  } else {
+    ctxLine = 'only what I name in the task below — do not search anywhere else';
+  }
+
+  const scope = s.dims.Tools.score >= 2
+    ? 'Produce the draft / analysis only. Do NOT send, post, or schedule anything — I will trigger that separately after I review.'
+    : 'Touch only the sources named above; do not hunt for extra material.';
+  const stopRule = (s.dims.Runtime.score >= 2 || s.flags.bigVolume)
+    ? 'If a source is missing or ambiguous, stop and ask me rather than searching broadly or looping.'
+    : 'If something is unclear, make one reasonable assumption, note it, and keep going.';
+
+  const b = x => '<strong>' + escapeHtml(x) + '</strong>';
+  const html =
+    'Use ' + b(modelName) + ' for this task.\n\n' +
+    'Context — pre-load only this, so you do not go hunting:\n  ' + b(ctxLine) + '\n\n' +
+    'Scope — ' + escapeHtml(scope) + '\n\n' +
+    'Stop rule — ' + escapeHtml(stopRule) + '\n\n' +
+    'Task —\n  ' + escapeHtml(original);
+  lastReady =
+    'Use ' + modelName + ' for this task.\n\n' +
+    'Context — pre-load only this, so you do not go hunting:\n  ' + ctxLine + '\n\n' +
+    'Scope — ' + scope + '\n\n' +
+    'Stop rule — ' + stopRule + '\n\n' +
+    'Task —\n  ' + original;
+  return html;
+}
+function copyReady(){
+  if (!lastReady) return;
+  navigator.clipboard.writeText(lastReady).then(() => {
+    const btn = document.getElementById('copyReadyBtn');
+    if (btn){ const o = btn.textContent; btn.textContent = 'Copied ✓'; setTimeout(() => { btn.textContent = o; }, 1500); }
+  }).catch(() => {});
+}
+
 function headroom(s) {
   // Honest DIRECTION only — the real number comes from Cowork's /cost, not this heuristic.
   const alreadyLean = s.flags.ctxCount <= 1 && !s.flags.bigVolume && s.dims.Tools.score <= 1;
@@ -516,6 +655,12 @@ function renderInternal(s) {
        <span style="font-size:16px; color:var(--muted);">≈ ${dollarRange} per task</span>
      </div>
      <p class="legend" style="margin-top:6px;">Measured example: ${band.example}</p>`;
+  // highlight the current grade's row in the measured-tier-bands table
+  document.querySelectorAll('tr[data-tier]').forEach(row => {
+    const active = row.getAttribute('data-tier') === s.grade;
+    row.style.background = active ? '#fde2e2' : '';
+    row.style.fontWeight = active ? '600' : '';
+  });
 }
 
 function surfaceAdvice(s, text) {
@@ -582,6 +727,7 @@ function analyze() {
     `<div class="tip" style="${sa.needsCowork ? '' : 'border-left-color:#16a34a; background:#f0fdf4;'}">${sa.msg}</div>`;
 
   document.getElementById('rewrite').textContent = buildRewrite(text, s);
+  document.getElementById('ready').innerHTML = buildConcreteRewrite(text, s);
   renderInternal(s);
   const h = headroom(s);
   document.getElementById('savings').innerHTML =

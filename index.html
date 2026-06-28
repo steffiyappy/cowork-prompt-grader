@@ -483,7 +483,7 @@ function buildTips(s) {
     tips.push('<strong>Separate thinking from doing.</strong> Get the analysis first, review it, then send / post / schedule in a second prompt. Don\'t let it act on the first pass.');
   }
   if (s.dims.Models.score >= 2) {
-    tips.push('<strong>Right-size the deliverable.</strong> If you don\'t truly need a full deck or report, ask for a short bullet summary — a lighter output can run on a cheaper, faster model.');
+    tips.push('<strong>Right-size the deliverable.</strong> If you don\'t truly need a full deck or a multi-page report, ask for a short summary or a one-pager instead. A smaller deliverable is less for the system to build, and building the output is one of the biggest cost levers.');
   }
   if (s.dims.Runtime.score >= 2) {
     tips.push('<strong>Avoid long chains.</strong> "Do X, then Y, then monitor weekly" keeps the system running and looping. Run one step at a time.');
@@ -539,12 +539,17 @@ function inferSubject(text){
   // a quoted or /referenced name wins
   const q = text.match(/[\/"']([A-Za-z0-9][A-Za-z0-9 ._-]{1,40})["']/);
   if (q) return q[1].trim();
-  // otherwise the first proper noun that isn't a command/app word
+  // a name introduced by with / for / about / client / customer / account
+  const rel = text.match(/\b(?:with|for|about|client|customer|account|re)\s+([A-Z][A-Za-z0-9&.\-]{2,})/);
+  if (rel && !isGenericToken(rel[1])) return rel[1].trim();
+  // otherwise the first proper noun that isn't a command / app / generic word
   const caps = text.match(/\b[A-Z][a-zA-Z]{2,}\b/g) || [];
-  const stop = new Set('Analyse Analyze Create Draft Build Produce Generate Write Prepare Compile Summarise Summarize Review Pull Look Search Cowork Copilot Microsoft Word Excel PowerPoint OneDrive SharePoint Teams Outlook The For And With Without But Use Show Then Once After Save Do Give List Compare Identify Roll Include Stop Confirm'.split(' '));
-  const cand = caps.filter(w => !stop.has(w));
+  const cand = caps.filter(w => !isGenericToken(w));
   return cand.length ? cand[0] : null;
 }
+const SUBJECT_STOPWORDS = new Set('Analyse Analyze Create Draft Build Produce Generate Write Prepare Compile Summarise Summarize Review Pull Look Search Cowork Copilot Microsoft Word Excel PowerPoint OneDrive SharePoint Teams Outlook Dynamics The For And With Without But Use Show Then Once After Save Do Give List Compare Identify Roll Include Stop Confirm CRM ERP KPI SLA API PDF URL Email Emails Inbox Notes Note Report Document Deck Slides Data Dataset Spreadsheet Workbook Meeting Meetings Calendar Chat Chats'.split(' '));
+function isGenericToken(w){ return SUBJECT_STOPWORDS.has(w); }
+
 let lastReady = '';
 function buildConcreteRewrite(text, s){
   let original = text.trim().replace(/\s+/g, ' ');
@@ -552,32 +557,28 @@ function buildConcreteRewrite(text, s){
   const lower = ' ' + original.toLowerCase() + ' ';
   const ctxGroups = (typeof contextGroups === 'function') ? contextGroups(lower) : [];
   const subject = inferSubject(original);
+  const b = x => '<strong>' + escapeHtml(x) + '</strong>';
 
-  // The inferred bit (sources + subject + time window) is the only part we guess,
-  // so it is the part we bold for the user to sanity-check.
-  let ctxPhrase = '';
-  if (ctxGroups.length){
+  // Only add a guardrail sentence when it actually removes waste. For an
+  // already-lean task we leave the prompt as the user wrote it rather than
+  // padding it with fences it doesn't need.
+  const includeCtx   = ctxGroups.length >= 2 || (ctxGroups.length >= 1 && s.flags.bigVolume);
+  const includeScope = s.dims.Tools.score >= 2;
+  const includeStop  = s.dims.Runtime.score >= 2 || s.flags.bigVolume;
+
+  let ctxHtml = '', ctxPlain = '';
+  if (includeCtx){
     const named = ctxGroups.map(g => SOURCE_LABELS[g] || g);
     const scoped = subject ? ' relating to ' + subject : '';
-    ctxPhrase = named.join(', ') + scoped + ' from the last 30 days';
+    const phrase = named.join(', ') + scoped + ' from the last 30 days';
+    ctxHtml  = ' To do this, only look at ' + b(phrase) + ', and do not search anywhere else.';
+    ctxPlain = ' To do this, only look at ' + phrase + ', and do not search anywhere else.';
   }
+  const scopeSentence = includeScope ? ' Produce the draft and analysis only. Do not send, post, or schedule anything; I will do that myself separately once I have reviewed it.' : '';
+  const stopSentence  = includeStop  ? ' If a source is missing or unclear, stop and ask me rather than searching broadly or looping.' : '';
 
-  const scopeSentence = s.dims.Tools.score >= 2
-    ? 'Produce the draft and analysis only. Do not send, post, or schedule anything; I will do that myself separately once I have reviewed it.'
-    : 'Stick to those sources and do not go hunting for extra material.';
-  const stopSentence = (s.dims.Runtime.score >= 2 || s.flags.bigVolume)
-    ? 'If a source is missing or unclear, stop and ask me rather than searching broadly or looping.'
-    : 'If anything is unclear, make one reasonable assumption, note it, and keep going.';
-
-  const b = x => '<strong>' + escapeHtml(x) + '</strong>';
-  // Build a natural, paragraph-style prompt: the task first, then the
-  // cost-saving guardrails as plain sentences a person would actually write.
-  const ctxHtml  = ctxPhrase ? 'To do this, only look at ' + b(ctxPhrase) + ', and do not search anywhere else. ' : 'Only use the sources I have named above, and do not go looking anywhere else. ';
-  const ctxPlain = ctxPhrase ? 'To do this, only look at ' + ctxPhrase + ', and do not search anywhere else. ' : 'Only use the sources I have named above, and do not go looking anywhere else. ';
-
-  const html  = escapeHtml(original) + '\n\n' + ctxHtml  + escapeHtml(scopeSentence) + ' ' + escapeHtml(stopSentence);
-  lastReady   = original            + '\n\n' + ctxPlain + scopeSentence + ' ' + stopSentence;
-  return html;
+  lastReady = original + ctxPlain + scopeSentence + stopSentence;
+  return escapeHtml(original) + ctxHtml + escapeHtml(scopeSentence) + escapeHtml(stopSentence);
 }
 function copyReady(){
   if (!lastReady) return;
@@ -666,24 +667,24 @@ function surfaceAdvice(s, text) {
     || s.flags.recurring
     || (s.dims.Tools.score >= 3 && s.dims.Runtime.score >= 3);
   if (needsCowork) {
-    const why = s.grade === 'Heavy+' ? 'sustained multi-step data work'
-      : s.flags.sendCount >= 1 ? 'it sends / posts / schedules on your behalf'
-      : s.flags.recurring ? 'it runs unattended on a schedule'
-      : 'it orchestrates several steps and actions';
+    const why = s.grade === 'Heavy+' ? 'does sustained, multi-step data work'
+      : s.flags.sendCount >= 1 ? 'sends, posts, or schedules something on your behalf'
+      : s.flags.recurring ? 'runs unattended on a schedule'
+      : 'orchestrates several steps and actions in one go';
     return { needsCowork: true,
-      msg: `<strong>Cowork is the right tool here</strong> — ${why}, which is exactly what Cowork is built for. The included Copilots can't run autonomously or take actions for you.` };
+      msg: `<strong>Cowork is the right tool here.</strong> It ${why}, which is exactly what Cowork is built for. The included Copilots can help you draft and analyse, but they can't run on their own or take actions for you.` };
   }
   const sugg = [];
-  if (/summari|recap|catch me up|what did|brief me|tl;dr|notes from/.test(lower)) sugg.push('<strong>Copilot Chat</strong> for the summary/recap');
-  if (/research|find out|look into|landscape|background on|competitive|market|literature/.test(lower)) sugg.push('<strong>Researcher</strong> for multi-source research');
-  if (/analy|trend|chart|forecast|pivot|spreadsheet|excel|the data|dataset|numbers/.test(lower)) sugg.push('<strong>Analyst</strong> or <strong>Excel Copilot</strong> for the analysis');
-  if (/draft|write |reply|respond|compose|email to/.test(lower)) sugg.push('<strong>Copilot Chat</strong> or <strong>Outlook Copilot</strong> for the draft');
-  if (/deck|slides|presentation|powerpoint|pptx/.test(lower)) sugg.push('<strong>PowerPoint Copilot</strong> for the deck');
-  if (/\bdocument\b|\breport\b|\bword\b|\bmemo\b|\bletter\b/.test(lower)) sugg.push('<strong>Word Copilot</strong> for the document');
+  if (/summari|recap|catch me up|what did|brief me|tl;dr|notes from/.test(lower)) sugg.push('<strong>Microsoft 365 Copilot Chat</strong> for the summary or recap');
+  if (/research|find out|look into|landscape|background on|competitive|market|literature/.test(lower)) sugg.push('the <strong>Researcher</strong> agent for multi-source research');
+  if (/analy|trend|chart|forecast|pivot|spreadsheet|excel|the data|dataset|numbers/.test(lower)) sugg.push('<strong>Copilot in Excel</strong> (or the <strong>Analyst</strong> agent for deeper data work)');
+  if (/draft|write |reply|respond|compose|email to/.test(lower)) sugg.push('<strong>Copilot in Outlook</strong> or <strong>Microsoft 365 Copilot Chat</strong> for the draft');
+  if (/deck|slides|presentation|powerpoint|pptx/.test(lower)) sugg.push('<strong>Copilot in PowerPoint</strong> for the deck');
+  if (/\bdocument\b|\breport\b|\bword\b|\bmemo\b|\bletter\b/.test(lower)) sugg.push('<strong>Copilot in Word</strong> for the document');
   const seen = new Set(); const picks = sugg.filter(x => !seen.has(x) && seen.add(x)).slice(0, 3);
-  const list = picks.length ? picks.join('; ') : '<strong>Copilot Chat</strong>';
+  const list = picks.length ? picks.join('; or ') : '<strong>Microsoft 365 Copilot Chat</strong>';
   return { needsCowork: false,
-    msg: `💡 <strong>You may not need Cowork for this.</strong> It looks like a one-shot task with no autonomous actions — try ${list}. These are <strong>included in your Microsoft 365 Copilot licence and use zero Cowork credits</strong>. Save Cowork for when it must run unattended or take actions for you.` };
+    msg: `💡 <strong>You may not need Cowork for this.</strong> It looks like a one-shot task with no autonomous actions, so you can likely do it in ${list}. Those come with your Microsoft 365 Copilot subscription and don't draw any Cowork credits. Keep Cowork for tasks that must run unattended or take actions for you.` };
 }
 
 function analyze() {

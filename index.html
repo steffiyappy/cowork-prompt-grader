@@ -547,38 +547,36 @@ function inferSubject(text){
 }
 let lastReady = '';
 function buildConcreteRewrite(text, s){
-  const original = text.trim().replace(/\s+/g, ' ');
+  let original = text.trim().replace(/\s+/g, ' ');
+  if (!/[.!?]$/.test(original)) original += '.';
   const lower = ' ' + original.toLowerCase() + ' ';
   const ctxGroups = (typeof contextGroups === 'function') ? contextGroups(lower) : [];
   const subject = inferSubject(original);
 
-  let ctxLine;
+  // The inferred bit (sources + subject + time window) is the only part we guess,
+  // so it is the part we bold for the user to sanity-check.
+  let ctxPhrase = '';
   if (ctxGroups.length){
     const named = ctxGroups.map(g => SOURCE_LABELS[g] || g);
     const scoped = subject ? ' relating to ' + subject : '';
-    ctxLine = named.join(', ') + scoped + ', from the last 30 days';
-  } else {
-    ctxLine = 'only what I name in the task below — do not search anywhere else';
+    ctxPhrase = named.join(', ') + scoped + ' from the last 30 days';
   }
 
-  const scope = s.dims.Tools.score >= 2
-    ? 'Produce the draft / analysis only. Do NOT send, post, or schedule anything — I will trigger that separately after I review.'
-    : 'Touch only the sources named above; do not hunt for extra material.';
-  const stopRule = (s.dims.Runtime.score >= 2 || s.flags.bigVolume)
-    ? 'If a source is missing or ambiguous, stop and ask me rather than searching broadly or looping.'
-    : 'If something is unclear, make one reasonable assumption, note it, and keep going.';
+  const scopeSentence = s.dims.Tools.score >= 2
+    ? 'Produce the draft and analysis only. Do not send, post, or schedule anything; I will do that myself separately once I have reviewed it.'
+    : 'Stick to those sources and do not go hunting for extra material.';
+  const stopSentence = (s.dims.Runtime.score >= 2 || s.flags.bigVolume)
+    ? 'If a source is missing or unclear, stop and ask me rather than searching broadly or looping.'
+    : 'If anything is unclear, make one reasonable assumption, note it, and keep going.';
 
   const b = x => '<strong>' + escapeHtml(x) + '</strong>';
-  const html =
-    'Context — pre-load only this, so you do not go hunting:\n  ' + b(ctxLine) + '\n\n' +
-    'Scope — ' + escapeHtml(scope) + '\n\n' +
-    'Stop rule — ' + escapeHtml(stopRule) + '\n\n' +
-    'Task —\n  ' + escapeHtml(original);
-  lastReady =
-    'Context — pre-load only this, so you do not go hunting:\n  ' + ctxLine + '\n\n' +
-    'Scope — ' + scope + '\n\n' +
-    'Stop rule — ' + stopRule + '\n\n' +
-    'Task —\n  ' + original;
+  // Build a natural, paragraph-style prompt: the task first, then the
+  // cost-saving guardrails as plain sentences a person would actually write.
+  const ctxHtml  = ctxPhrase ? 'To do this, only look at ' + b(ctxPhrase) + ', and do not search anywhere else. ' : 'Only use the sources I have named above, and do not go looking anywhere else. ';
+  const ctxPlain = ctxPhrase ? 'To do this, only look at ' + ctxPhrase + ', and do not search anywhere else. ' : 'Only use the sources I have named above, and do not go looking anywhere else. ';
+
+  const html  = escapeHtml(original) + '\n\n' + ctxHtml  + escapeHtml(scopeSentence) + ' ' + escapeHtml(stopSentence);
+  lastReady   = original            + '\n\n' + ctxPlain + scopeSentence + ' ' + stopSentence;
   return html;
 }
 function copyReady(){

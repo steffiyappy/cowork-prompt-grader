@@ -277,7 +277,7 @@ const SAMPLES = [
   {
     label: 'Heavy+ · multi-tab model rebuild',
     grade: 'Heavy+',
-    text: `Rebuild our full-year margin model workbook end-to-end. Pull the latest dated inputs folder (trades workbook, purchases workbook, IDT file, monthly pricing template), rebuild every tab (Daily Reporting, Weekly Summary, FIFO COGS, Purchases, Sales Trades, Duty Levy), apply the refinery run rate across all 12 months, recalculate so margins and totals are baked in, and verify every sheet reconciles with no formula errors. If a source is missing, carry forward the last known value. Save the updated workbook and reply with the new grand totals.`
+    text: `Rebuild our annual sales-commission workbook from the ground up. Pull the newest dated source folder (the regional bookings export, the headcount roster, the quota sheet, and the rate-card template), rebuild every tab (Bookings, Quota Attainment, Commission Calc, Clawbacks, Regional Rollup, Summary), apply the full-year quota schedule across all 12 months, recalculate so every payout and total is written into values, and verify each sheet reconciles with no formula errors. If an input is missing, carry forward the previous month's figure. Save the rebuilt workbook and reply with the new annual commission totals.`
   }
 ];
 
@@ -536,16 +536,15 @@ const SOURCE_LABELS = {
 };
 function escapeHtml(str){ return String(str).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 function inferSubject(text){
-  // a quoted or /referenced name wins
+  // Only name a subject when there is a real signal: a quoted/ referenced name,
+  // or a name introduced by with / for / about / client / customer / account.
+  // We deliberately do NOT guess from the first capitalised word, because that
+  // grabs command verbs ("Rebuild") or generic terms ("CRM") and reads wrong.
   const q = text.match(/[\/"']([A-Za-z0-9][A-Za-z0-9 ._-]{1,40})["']/);
-  if (q) return q[1].trim();
-  // a name introduced by with / for / about / client / customer / account
-  const rel = text.match(/\b(?:with|for|about|client|customer|account|re)\s+([A-Z][A-Za-z0-9&.\-]{2,})/);
+  if (q && !isGenericToken(q[1].trim())) return q[1].trim();
+  const rel = text.match(/\b(?:with|for|about|client|customer|account)\s+([A-Z][A-Za-z0-9&.\-]{2,})/);
   if (rel && !isGenericToken(rel[1])) return rel[1].trim();
-  // otherwise the first proper noun that isn't a command / app / generic word
-  const caps = text.match(/\b[A-Z][a-zA-Z]{2,}\b/g) || [];
-  const cand = caps.filter(w => !isGenericToken(w));
-  return cand.length ? cand[0] : null;
+  return null;
 }
 const SUBJECT_STOPWORDS = new Set('Analyse Analyze Create Draft Build Produce Generate Write Prepare Compile Summarise Summarize Review Pull Look Search Cowork Copilot Microsoft Word Excel PowerPoint OneDrive SharePoint Teams Outlook Dynamics The For And With Without But Use Show Then Once After Save Do Give List Compare Identify Roll Include Stop Confirm CRM ERP KPI SLA API PDF URL Email Emails Inbox Notes Note Report Document Deck Slides Data Dataset Spreadsheet Workbook Meeting Meetings Calendar Chat Chats'.split(' '));
 function isGenericToken(w){ return SUBJECT_STOPWORDS.has(w); }

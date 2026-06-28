@@ -552,10 +552,6 @@ function buildConcreteRewrite(text, s){
   const ctxGroups = (typeof contextGroups === 'function') ? contextGroups(lower) : [];
   const subject = inferSubject(original);
 
-  const modelName = (s.grade === 'Heavy' || s.grade === 'Heavy+')
-    ? 'a capable model (the strongest you have)'
-    : s.grade === 'Medium' ? 'a mid-tier model' : 'a fast, lighter model';
-
   let ctxLine;
   if (ctxGroups.length){
     const named = ctxGroups.map(g => SOURCE_LABELS[g] || g);
@@ -574,13 +570,11 @@ function buildConcreteRewrite(text, s){
 
   const b = x => '<strong>' + escapeHtml(x) + '</strong>';
   const html =
-    'Use ' + b(modelName) + ' for this task.\n\n' +
     'Context — pre-load only this, so you do not go hunting:\n  ' + b(ctxLine) + '\n\n' +
     'Scope — ' + escapeHtml(scope) + '\n\n' +
     'Stop rule — ' + escapeHtml(stopRule) + '\n\n' +
     'Task —\n  ' + escapeHtml(original);
   lastReady =
-    'Use ' + modelName + ' for this task.\n\n' +
     'Context — pre-load only this, so you do not go hunting:\n  ' + ctxLine + '\n\n' +
     'Scope — ' + scope + '\n\n' +
     'Stop rule — ' + stopRule + '\n\n' +

@@ -231,7 +231,7 @@
         <h2 style="margin:0; font-size:20px; color:var(--slate);">Ready-to-use prompt</h2>
         <button class="secondary" id="copyReadyBtn" onclick="copyReady()" style="padding:6px 12px; font-size:13px;">Copy</button>
       </div>
-      <p class="legend" style="margin-top:6px;">The same rewrite, but filled in with sensible concrete values so you can paste it straight into Cowork. Skim the <strong>bold</strong> assumptions and adjust any that are wrong before you run it.</p>
+      <p class="legend" style="margin-top:6px;">The same task, kept whole, but written to use fewer credits: sources scoped, one analysis reused across outputs, and drafting split from sending. Skim the <strong>bold</strong> assumptions and adjust any that are wrong before you run it.</p>
       <div id="ready" class="rewrite"></div>
     </div>
   </div>
@@ -564,6 +564,10 @@ function buildConcreteRewrite(text, s){
   const includeCtx   = ctxGroups.length >= 2 || (ctxGroups.length >= 1 && s.flags.bigVolume);
   const includeScope = s.dims.Tools.score >= 2;
   const includeStop  = s.dims.Runtime.score >= 2 || s.flags.bigVolume;
+  // Biggest real saver on multi-output / production tasks: read and analyse the
+  // source ONCE, then reuse that single analysis for every deliverable instead
+  // of re-reading or re-computing per output.
+  const includeReuse = s.flags.production || (s.grade === 'Heavy+') || (s.dims.Tools.score >= 2 && s.dims.Context.score >= 2);
 
   let ctxHtml = '', ctxPlain = '';
   if (includeCtx){
@@ -573,11 +577,12 @@ function buildConcreteRewrite(text, s){
     ctxHtml  = ' To do this, only look at ' + b(phrase) + ', and do not search anywhere else.';
     ctxPlain = ' To do this, only look at ' + phrase + ', and do not search anywhere else.';
   }
+  const reuseSentence = includeReuse ? ' Read and analyse the source once, then reuse that single analysis for every output instead of re-reading or recalculating per deliverable.' : '';
   const scopeSentence = includeScope ? ' Produce the draft and analysis only. Do not send, post, or schedule anything; I will do that myself separately once I have reviewed it.' : '';
   const stopSentence  = includeStop  ? ' If a source is missing or unclear, stop and ask me rather than searching broadly or looping.' : '';
 
-  lastReady = original + ctxPlain + scopeSentence + stopSentence;
-  return escapeHtml(original) + ctxHtml + escapeHtml(scopeSentence) + escapeHtml(stopSentence);
+  lastReady = original + ctxPlain + reuseSentence + scopeSentence + stopSentence;
+  return escapeHtml(original) + ctxHtml + escapeHtml(reuseSentence) + escapeHtml(scopeSentence) + escapeHtml(stopSentence);
 }
 function copyReady(){
   if (!lastReady) return;

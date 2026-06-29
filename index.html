@@ -678,17 +678,36 @@ function surfaceAdvice(s, text) {
     return { needsCowork: true,
       msg: `<strong>Cowork is the right tool here.</strong> It ${why}, which is exactly what Cowork is built for. The included Copilots can help you draft and analyse, but they can't run on their own or take actions for you.` };
   }
+  // Does the wording mean an EXISTING open file, or a NEW file from a brief?
+  const editsExisting = /\b(this|my|the|open|attached|existing)\b[^.]*\b(document|doc|file|spreadsheet|workbook|sheet|deck|slides|presentation|report)\b/.test(lower)
+    || /\b(tidy|clean up|clean|edit|rewrite|revise|reword|shorten|polish|fix|update|reformat)\b/.test(lower);
+  const createsNew = /\b(create|build|make|generate|draft|produce|write)\b[^.]*\b(a |an |new )?(document|doc|deck|slides|presentation|spreadsheet|workbook|report|memo|one-pager)\b/.test(lower)
+    || /\bbrand[- ]new\b/.test(lower);
+  const dataWork = /(analy|trend|outlier|forecast|pivot|reconcile|spreadsheet|workbook|excel|csv|figures|\bthe data\b|\bdataset\b|\bnumbers\b)/.test(lower);
+
   const sugg = [];
-  if (/summari|recap|catch me up|what did|brief me|tl;dr|notes from/.test(lower)) sugg.push('<strong>Microsoft 365 Copilot Chat</strong> for the summary or recap');
-  if (/research|find out|look into|landscape|background on|competitive|market|literature/.test(lower)) sugg.push('the <strong>Researcher</strong> agent for multi-source research');
-  if (/analy|trend|chart|forecast|pivot|spreadsheet|excel|the data|dataset|numbers/.test(lower)) sugg.push('<strong>Copilot in Excel</strong> (or the <strong>Analyst</strong> agent for deeper data work)');
-  if (/draft|write |reply|respond|compose|email to/.test(lower)) sugg.push('<strong>Copilot in Outlook</strong> or <strong>Microsoft 365 Copilot Chat</strong> for the draft');
-  if (/deck|slides|presentation|powerpoint|pptx/.test(lower)) sugg.push('<strong>Copilot in PowerPoint</strong> for the deck');
-  if (/\bdocument\b|\breport\b|\bword\b|\bmemo\b|\bletter\b/.test(lower)) sugg.push('<strong>Copilot in Word</strong> for the document');
-  const seen = new Set(); const picks = sugg.filter(x => !seen.has(x) && seen.add(x)).slice(0, 3);
-  const list = picks.length ? picks.join('; or ') : '<strong>Microsoft 365 Copilot Chat</strong>';
+  // Data work first — never route to Chat.
+  if (dataWork) sugg.push(editsExisting
+      ? '<strong>Copilot in Excel</strong> (if your spreadsheet is open), or the <strong>Analyst agent</strong> to analyse an uploaded data file'
+      : 'the <strong>Analyst agent</strong> to analyse an uploaded data file (or <strong>Copilot in Excel</strong> if it is already open)');
+  if (/research|find out|look into|landscape|background on|competitive|market|literature/.test(lower)) sugg.push('the <strong>Researcher agent</strong> for multi-source, cited research');
+  if (/\b(meeting|recap|notes from|transcript|standup|stand-up)\b/.test(lower) && !dataWork) sugg.push('<strong>Microsoft 365 Copilot Chat</strong>, or <strong>Copilot in Teams</strong> for a Teams meeting');
+  if (/\b(reply|respond|email to|email back|compose an email|draft an email|send (an |a )?email)\b/.test(lower)) sugg.push('<strong>Copilot in Outlook</strong> for the email draft');
+  if (/deck|slides|presentation|powerpoint|pptx/.test(lower)) sugg.push(editsExisting && !createsNew
+      ? '<strong>Copilot in PowerPoint</strong> to edit your open deck'
+      : 'the <strong>PowerPoint Agent</strong> to build a new deck');
+  if (/\b(document|report|word|memo|letter)\b/.test(lower) && !dataWork) sugg.push(editsExisting && !createsNew
+      ? '<strong>Copilot in Word</strong> to edit your open document'
+      : 'the <strong>Word Agent</strong> to create a new document');
+  if (/\b(shareable|share this|into a (doc|page)|turn (this|the answer) into)\b/.test(lower)) sugg.push('<strong>Copilot Pages</strong> to turn an answer into a shareable doc');
+  if (/\b(across|gather|several (files|sources|documents)|notebook|one place|work across)\b/.test(lower)) sugg.push('<strong>Copilot Notebooks</strong> to work across several sources');
+  if (!sugg.length && /summari|recap|catch me up|what did|brief me|tl;dr|q&a|question/.test(lower)) sugg.push('<strong>Microsoft 365 Copilot Chat</strong> for the summary or Q&A');
+
+  const seen = new Set(); const picks = sugg.filter(x => !seen.has(x) && seen.add(x)).slice(0, 2);
+  const list = picks.length ? picks.join('; and ') : '<strong>Microsoft 365 Copilot Chat</strong>';
+  const splitNote = picks.length >= 2 ? ' If your task spans both, run each in its own Copilot — give a separate prompt to each, since they can\'t see each other\'s work.' : '';
   return { needsCowork: false,
-    msg: `💡 <strong>You may not need Cowork for this.</strong> It looks like a one-shot task with no autonomous actions, so you can likely do it in ${list}. Those come with your Microsoft 365 Copilot subscription and don't draw any Cowork credits. Keep Cowork for tasks that must run unattended or take actions for you.` };
+    msg: `💡 <strong>You may not need Cowork for this.</strong> It looks like a one-shot task with no autonomous actions, so you can likely do it in ${list}.${splitNote} These come with your Microsoft 365 Copilot subscription and don't draw any Cowork credits. Keep Cowork for tasks that must run unattended or take actions for you.` };
 }
 
 function analyze() {

@@ -599,7 +599,7 @@ function headroom(s) {
     return { level: 'Low', msg: 'This is already lean and well-scoped. The rewrite is mostly cosmetic — expect little to no saving.' };
   }
   if (s.grade === 'Heavy+') {
-    return { level: 'High', msg: 'Production-scale data work — multi-tab rebuilds, full-year consolidation, multi-source reconciliation. Tasks like this measured 700–7,900 credits on a live tenant. Biggest savings: split it (load/recalculate as one run, build the deliverable as another), narrow to only the tabs/sources that changed, and avoid full rebuilds when an incremental update will do.' };
+    return { level: 'High', msg: 'Production-scale data work — multi-tab rebuilds, full-year consolidation, multi-source reconciliation. Biggest savings: split it (load/recalculate as one run, build the deliverable as another), narrow to only the tabs/sources that changed, and avoid full rebuilds when an incremental update will do.', creditNote: 'Tasks like this measured 700–7,900 credits on a live tenant.' };
   }
   if (s.grade === 'Heavy') {
     return { level: 'High', msg: 'There is real wasted motion to cut — broad sources, multiple actions, or long chains. The rewrite should help. But the core work still costs the same; only the wasted motion goes away.' };
@@ -727,8 +727,9 @@ function analyze() {
   document.getElementById('ready').innerHTML = buildConcreteRewrite(text, s);
   renderInternal(s);
   const h = headroom(s);
+  const creditNote = (h.creditNote && internalOn()) ? ` <span style="color:#b91c1c; font-weight:600;">${h.creditNote}</span>` : '';
   document.getElementById('savings').innerHTML =
-    `<strong>Savings headroom: ${h.level}.</strong> ${h.msg} ` +
+    `<strong>Savings headroom: ${h.level}.</strong> ${h.msg}${creditNote} ` +
     `<span style="color:var(--muted); font-weight:400;">These show direction, not exact prices — to see the real charge, run the task in Cowork and type <code>/cost</code> in the task chat.</span>`;
 
   document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });

@@ -662,23 +662,9 @@ function renderInternal(s) {
 
 function surfaceAdvice(s, text) {
   const lower = ' ' + text.toLowerCase().replace(/\s+/g, ' ') + ' ';
-  // Cowork (usage-billed) is genuinely warranted only when the task must act on
-  // its own (send/post/schedule), run unattended/scheduled, or do sustained
-  // multi-tab production work. Everything else can usually run in an INCLUDED
-  // M365 Copilot surface (Chat, Researcher, Analyst, in-app Copilots) for free.
-  const needsCowork = s.grade === 'Heavy+'
-    || s.flags.sendCount >= 1
-    || s.flags.recurring
-    || (s.dims.Tools.score >= 3 && s.dims.Runtime.score >= 3);
-  if (needsCowork) {
-    const why = s.grade === 'Heavy+' ? 'does sustained, multi-step data work'
-      : s.flags.sendCount >= 1 ? 'sends, posts, or schedules something on your behalf'
-      : s.flags.recurring ? 'runs unattended on a schedule'
-      : 'orchestrates several steps and actions in one go';
-    return { needsCowork: true,
-      msg: `<strong>Cowork is the right tool here.</strong> It ${why}, which is exactly what Cowork is built for. The included Copilots can help you draft and analyse, but they can't run on their own or take actions for you.` };
-  }
-  // Does the wording mean an EXISTING open file, or a NEW file from a brief?
+  // Detect the included-surface picks first, so both branches can use them:
+  // the no-Cowork path recommends them; the Cowork path offers them as the
+  // manual, no-credit alternative.
   const editsExisting = /\b(this|my|the|open|attached|existing)\b[^.]*\b(document|doc|file|spreadsheet|workbook|sheet|deck|slides|presentation|report)\b/.test(lower)
     || /\b(tidy|clean up|clean|edit|rewrite|revise|reword|shorten|polish|fix|update|reformat)\b/.test(lower);
   const createsNew = /\b(create|build|make|generate|draft|produce|write)\b[^.]*\b(a |an |new )?(document|doc|deck|slides|presentation|spreadsheet|workbook|report|memo|one-pager)\b/.test(lower)
@@ -686,7 +672,6 @@ function surfaceAdvice(s, text) {
   const dataWork = /(analy|trend|outlier|forecast|pivot|reconcile|spreadsheet|workbook|excel|csv|figures|\bthe data\b|\bdataset\b|\bnumbers\b)/.test(lower);
 
   const sugg = [];
-  // Data work first — never route to Chat.
   if (dataWork) sugg.push(editsExisting
       ? '<strong>Copilot in Excel</strong> (if your spreadsheet is open), or the <strong>Analyst agent</strong> to analyse an uploaded data file'
       : 'the <strong>Analyst agent</strong> to analyse an uploaded data file (or <strong>Copilot in Excel</strong> if it is already open)');
@@ -702,9 +687,25 @@ function surfaceAdvice(s, text) {
   if (/\b(shareable|share this|into a (doc|page)|turn (this|the answer) into)\b/.test(lower)) sugg.push('<strong>Copilot Pages</strong> to turn an answer into a shareable doc');
   if (/\b(across|gather|several (files|sources|documents)|notebook|one place|work across)\b/.test(lower)) sugg.push('<strong>Copilot Notebooks</strong> to work across several sources');
   if (!sugg.length && /summari|recap|catch me up|what did|brief me|tl;dr|q&a|question/.test(lower)) sugg.push('<strong>Microsoft 365 Copilot Chat</strong> for the summary or Q&A');
+  const seen = new Set(); const picks = sugg.filter(x => !seen.has(x) && seen.add(x)).slice(0, 3);
 
-  const seen = new Set(); const picks = sugg.filter(x => !seen.has(x) && seen.add(x)).slice(0, 2);
-  const list = picks.length ? picks.join('; and ') : '<strong>Microsoft 365 Copilot Chat</strong>';
+  // Cowork (usage-billed) is genuinely warranted only when the task must act on
+  // its own (send/post/schedule), run unattended/scheduled, or do sustained work.
+  const needsCowork = s.grade === 'Heavy+'
+    || s.flags.sendCount >= 1
+    || s.flags.recurring
+    || (s.dims.Tools.score >= 3 && s.dims.Runtime.score >= 3);
+  if (needsCowork) {
+    const why = s.grade === 'Heavy+' ? 'does sustained, multi-step data work'
+      : s.flags.sendCount >= 1 ? 'sends, posts, or schedules something on your behalf'
+      : s.flags.recurring ? 'runs unattended on a schedule'
+      : 'orchestrates several steps and actions in one go';
+    const altSurfaces = picks.length ? picks.join('; ') : '<strong>Copilot in Excel / the Analyst agent</strong>, the <strong>PowerPoint Agent</strong>, <strong>Copilot in Word</strong>, and <strong>Copilot in Outlook</strong>';
+    const alt = ` <strong>No-Cowork alternative:</strong> you can do the same work yourself across the included Copilots — ${altSurfaces} — running each part and doing any sending or scheduling manually. More hands-on, but it draws no Cowork credits${s.flags.recurring ? ' (worth it for a one-off; if it must repeat on a schedule, Cowork saves you doing it every time)' : ''}.`;
+    return { needsCowork: true,
+      msg: `<strong>Cowork is the right tool here.</strong> It ${why}, which is exactly what Cowork is built for — the included Copilots can't run on their own or take actions for you.${alt}` };
+  }
+  const list = picks.length ? picks.slice(0,2).join('; and ') : '<strong>Microsoft 365 Copilot Chat</strong>';
   const splitNote = picks.length >= 2 ? ' If your task spans both, run each in its own Copilot — give a separate prompt to each, since they can\'t see each other\'s work.' : '';
   return { needsCowork: false,
     msg: `💡 <strong>You may not need Cowork for this.</strong> It looks like a one-shot task with no autonomous actions, so you can likely do it in ${list}.${splitNote} These come with your Microsoft 365 Copilot subscription and don't draw any Cowork credits. Keep Cowork for tasks that must run unattended or take actions for you.` };

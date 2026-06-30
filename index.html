@@ -701,7 +701,7 @@ function surfaceAdvice(s, text) {
       : s.flags.recurring ? 'runs unattended on a schedule'
       : 'orchestrates several steps and actions in one go';
     const altSurfaces = picks.length ? picks.join('; ') : '<strong>Copilot in Excel / the Analyst agent</strong>, the <strong>PowerPoint Agent</strong>, <strong>Copilot in Word</strong>, and <strong>Copilot in Outlook</strong>';
-    const alt = ` <strong>No-Cowork alternative:</strong> you can do the same work yourself across the included Copilots — ${altSurfaces} — running each part and doing any sending or scheduling manually. More hands-on, but it draws no Cowork credits${s.flags.recurring ? ' (worth it for a one-off; if it must repeat on a schedule, Cowork saves you doing it every time)' : ''}.`;
+    const alt = ` <strong>No-Cowork alternative:</strong> you can do the same work yourself across the included Copilots — ${altSurfaces} — giving each one a short prompt for its part and doing any sending or scheduling manually. Not sure which surface fits a part? Check Microsoft's Copilot docs (learn.microsoft.com / support.microsoft.com). More hands-on, but it draws no Cowork credits${s.flags.recurring ? ' (worth it for a one-off; if it must repeat on a schedule, Cowork saves you doing it every time)' : ''}.`;
     return { needsCowork: true,
       msg: `<strong>Cowork is the right tool here.</strong> It ${why}, which is exactly what Cowork is built for — the included Copilots can't run on their own or take actions for you.${alt}` };
   }
